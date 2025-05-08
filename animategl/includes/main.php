@@ -35,26 +35,23 @@ class AnimateGL
 		$this->plugin_dir_url = plugin_dir_url($this->path);
 		$this->ajaxurl = admin_url('admin-ajax.php');
 
-		
+
 
 		add_action('init', array($this, 'init'));
 		add_action('admin_menu', array($this, "admin_menu"));
 
 		if (is_admin()) {
 			add_action('wp_ajax_agl_json', array($this,  'ajax_update_settings'));
-			add_action('wp_ajax_nopriv_agl_json', array($this,  'ajax_update_settings'));
 		}
 
 		add_action('enqueue_block_editor_assets', array($this, 'enqueue_block_editor_assets'));
 		add_action('enqueue_block_assets', array($this, 'enqueue_block_assets'));
 
-		
+
 
 		add_action('wp_enqueue_scripts', array($this, 'frontend_assets'));
 
 		register_activation_hook($this->path, array($this, "plugin_activated"));
-
-		
 	}
 
 	public function plugin_activated()
@@ -67,6 +64,9 @@ class AnimateGL
 
 	public function ajax_update_settings()
 	{
+		if (! current_user_can('manage_options')) {
+			wp_send_json_error('Insufficient permissions', 403);
+		}
 		check_ajax_referer('agl_nonce', 'security');
 
 		$json = sanitize_text_field(stripslashes($_POST['json']));
@@ -97,7 +97,6 @@ class AnimateGL
 		// register styles
 		wp_register_style('agl', $this->plugin_dir_url . 'css/animategl.css', array(), $version);
 		wp_register_style('agl-admin', $this->plugin_dir_url . 'css/admin.css', array(), $version);
-
 	}
 
 	public function frontend_assets()
@@ -133,7 +132,7 @@ class AnimateGL
 		$json = get_option('agl_json');
 
 		wp_localize_script('agl-embed', 'agl_options', array($json));
-		
+
 		wp_enqueue_style('agl');
 	}
 
@@ -146,7 +145,6 @@ class AnimateGL
 			$this->version,
 			true, // load in footer
 		);
-
 	}
 
 	public function admin_menu()

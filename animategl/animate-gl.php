@@ -4,28 +4,31 @@
 Plugin Name: AnimateGL 
 Plugin URI: http://codecanyon.net/user/creativeinteractivemedia
 Description: Advanced Animations and WebGL Effects Plugin
-Version: 1.4.23
+Version: 1.4.24
 Author: creativeinteractivemedia
 Author URI: http://codecanyon.net/user/creativeinteractivemedia
+License: GPLv2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: animate-gl
+Domain Path: /languages
 */
 
 if (!defined('ABSPATH')) {
 	exit; // Exit if accessed directly
 }
 
-define('ANIMATE_GL_VERSION', '1.4.23');
+define('ANIMATE_GL_VERSION', '1.4.24');
 define('ANIMATE_GL_FILE', __FILE__);
 
-if (!function_exists('animategl_fs')) {
+if (! function_exists('animategl_fs')) {
 	// Create a helper function for easy SDK access.
 	function animategl_fs()
 	{
 		global $animategl_fs;
 
-		if (!isset($animategl_fs)) {
+		if (! isset($animategl_fs)) {
 			// Include Freemius SDK.
-			require_once dirname(__FILE__) . '/freemius/start.php';
-
+			require_once dirname(__FILE__) . '/vendor/freemius/start.php';
 			$animategl_fs = fs_dynamic_init(array(
 				'id'                  => '12162',
 				'slug'                => 'animategl',
@@ -36,7 +39,6 @@ if (!function_exists('animategl_fs')) {
 				'has_paid_plans'      => false,
 				'menu'                => array(
 					'slug'           => 'agl_admin',
-					'first-path'		=> 'admin.php?page=agl_admin',
 					'account'        => false,
 					'contact'        => false,
 				),

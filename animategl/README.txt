@@ -4,8 +4,8 @@ License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 Tags: animation, animate, gutenberg animations, block animations, elementor animations, scroll animations, hover animations, animations for blocks, entrance animation, motion effects, image effects, animation effects, visual effects
 Requires at least: 5.0
-Tested up to: 6.2
-Stable tag: 1.1
+Tested up to: 6.8
+Stable tag: 1.4.24
 Requires PHP: 5.4
 
  CSS & WebGL Animations for Elementor & Gutenberg Blocks Animations, animations from CSS class, scroll animations, lock to scrollbar. Add eye-catching entrance animations to your website that bring your images to life and enhance the visual appeal of your web pages. Customize animations with CSS classes or a visual editor, and create unique and creative effects that will make your website stand out.

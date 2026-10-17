@@ -4,7 +4,7 @@
 Plugin Name: AnimateGL 
 Plugin URI: http://codecanyon.net/user/creativeinteractivemedia
 Description: Advanced Animations and WebGL Effects Plugin
-Version: 1.4.24
+Version: 1.4.25
 Author: creativeinteractivemedia
 Author URI: http://codecanyon.net/user/creativeinteractivemedia
 License: GPLv2 or later
@@ -17,7 +17,7 @@ if (!defined('ABSPATH')) {
 	exit; // Exit if accessed directly
 }
 
-define('ANIMATE_GL_VERSION', '1.4.24');
+define('ANIMATE_GL_VERSION', '1.4.25');
 define('ANIMATE_GL_FILE', __FILE__);
 
 if (! function_exists('animategl_fs')) {

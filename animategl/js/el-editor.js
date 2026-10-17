@@ -2,11 +2,15 @@
 
 window.addEventListener('load', function () {
 
-	const previewIframe = document.getElementById("elementor-preview-iframe");
 	const panel = document.getElementById('elementor-panel')
-	const agl = previewIframe.contentWindow.agl
-	const presets = agl.defaults.in.presets
-	const entranceNames = agl.defaults.in.names
+	if (!panel || typeof elementor === 'undefined') return
+
+	// The presets come from the runtime in the preview iframe, which may still be loading
+	function getEntrancePresets() {
+		const previewIframe = document.getElementById("elementor-preview-iframe");
+		const agl = (previewIframe && previewIframe.contentWindow && previewIframe.contentWindow.agl) || window.agl
+		return agl && agl.defaults && agl.defaults.in ? agl.defaults.in : null
+	}
 
 	const settings = {}
 	let currentModel
@@ -15,7 +19,10 @@ window.addEventListener('load', function () {
 			if (mutation.addedNodes.length) {
 				const aglNameDowpdown = panel.querySelector('select[data-setting="agl_in_name"]')
 				const aglDirectionDowpdown = panel.querySelector('select[data-setting="agl_in_direction"]')
-				if (aglNameDowpdown && !aglNameDowpdown.dataset.init) {
+				const entrance = getEntrancePresets()
+				if (aglNameDowpdown && !aglNameDowpdown.dataset.init && entrance) {
+					const presets = entrance.presets
+					const entranceNames = entrance.names
 					aglNameDowpdown.dataset.init = 'true'
 					aglNameDowpdown.innerHTML = ''
 
@@ -53,7 +60,7 @@ window.addEventListener('load', function () {
 						settings["agl_in_direction"] = ''
 
 						// reset distance
-						settings["agl_in_distance"]['size'] = 1
+						settings["agl_in_distance"] = Object.assign({ unit: 'ms' }, settings["agl_in_distance"], { size: 1 })
 						currentModel.setSetting("agl_in_distance", settings["agl_in_distance"])
 
 						initDirections(this.value)

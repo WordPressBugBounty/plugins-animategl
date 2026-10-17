@@ -45,7 +45,10 @@ class AnimateGL
 		}
 
 		add_action('enqueue_block_editor_assets', array($this, 'enqueue_block_editor_assets'));
-		add_action('enqueue_block_assets', array($this, 'enqueue_block_assets'));
+
+		// Dynamic blocks: register the AnimateGL block attributes server-side and add the classes on render
+		add_filter('register_block_type_args', array($this, 'register_block_attributes'), 10, 2);
+		add_filter('render_block', array($this, 'render_block'), 10, 2);
 
 
 
@@ -126,25 +129,110 @@ class AnimateGL
 		wp_localize_script('agl-embed', 'agl_options', array($json, $this->plugin_dir_url, $this->ajaxurl));
 	}
 
-	public function enqueue_block_assets()
-	{
-		wp_enqueue_script('agl-embed');
-		$json = get_option('agl_json');
-
-		wp_localize_script('agl-embed', 'agl_options', array($json));
-
-		wp_enqueue_style('agl');
-	}
-
+	// The block editor canvas is always an iframe since WP 7.1. The runtime (agl-embed) and
+	// animategl.css are no longer loaded there: the runtime crashed the editor and the CSS hid
+	// animated blocks. The settings panel only reads the presets from `agl`, so it's a dependency.
 	public function enqueue_block_editor_assets()
 	{
 		wp_enqueue_script(
 			'agl-block-options-script',
 			$this->plugin_dir_url . 'build/index.js',
-			array('wp-blocks', 'wp-element'),
+			array('agl', 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-hooks', 'wp-compose', 'wp-block-editor', 'wp-components'),
 			$this->version,
-			true, // load in footer
+			true // load in footer
 		);
+	}
+
+	// The block attributes that build/index.js adds to every block in the editor
+	private static $block_attributes = array(
+		'aglInName'          => array('type' => 'string'),
+		'aglInDirection'     => array('type' => 'string'),
+		'aglInDuration'      => array('type' => 'number'),
+		'aglInDelay'         => array('type' => 'number'),
+		'aglInDistance'      => array('type' => 'number'),
+		'aglInEasing'        => array('type' => 'string'),
+		'aglRepeat'          => array('type' => 'boolean', 'default' => false),
+		'aglLockToScrollbar' => array('type' => 'boolean', 'default' => false),
+	);
+
+	// Without these, the block renderer REST endpoint rejects dynamic blocks with
+	// "Invalid parameter(s): attributes"
+	public function register_block_attributes($args, $block_name = '')
+	{
+		$attributes = isset($args['attributes']) && is_array($args['attributes']) ? $args['attributes'] : array();
+		$args['attributes'] = array_merge(self::$block_attributes, $attributes);
+		return $args;
+	}
+
+	// Static blocks get the classes from the editor's save filter. Dynamic blocks have no saved
+	// markup, so add the same classes to the first tag of their rendered output.
+	public function render_block($block_content, $block)
+	{
+		if (empty($block['attrs']['aglInName']) || empty($block['blockName']) || !class_exists('WP_HTML_Tag_Processor')) {
+			return $block_content;
+		}
+
+		$block_type = WP_Block_Type_Registry::get_instance()->get_registered($block['blockName']);
+		if (!$block_type || !$block_type->is_dynamic()) {
+			return $block_content;
+		}
+
+		$tags = new WP_HTML_Tag_Processor($block_content);
+		if (!$tags->next_tag()) {
+			return $block_content;
+		}
+
+		// Dynamic blocks that also save markup (core/image) already have the classes
+		$existing = preg_split('/\s+/', (string) $tags->get_attribute('class'), -1, PREG_SPLIT_NO_EMPTY);
+		if (in_array('agl', $existing, true)) {
+			return $block_content;
+		}
+
+		foreach ($this->get_block_classes($block['attrs']) as $class) {
+			$tags->add_class($class);
+		}
+
+		return $tags->get_updated_html();
+	}
+
+	// Same classes as saveSidebarSelectAttribute() in src/index.js
+	private function get_block_classes($attrs)
+	{
+		if (!$this->is_class_token($attrs['aglInName'])) {
+			return array();
+		}
+		if ('custom' === $attrs['aglInName']) {
+			return array('agl');
+		}
+
+		$preset = 'agl-' . $attrs['aglInName'];
+		if (!empty($attrs['aglInDirection']) && $this->is_class_token($attrs['aglInDirection'])) {
+			$preset .= $attrs['aglInDirection'];
+		}
+		$classes = array('agl', $preset);
+
+		if (!empty($attrs['aglInEasing']) && $this->is_class_token($attrs['aglInEasing'])) {
+			$classes[] = 'agl-in-easing-' . $attrs['aglInEasing'];
+		}
+		foreach (array('aglInDuration' => 'duration', 'aglInDelay' => 'delay', 'aglInDistance' => 'distance') as $key => $suffix) {
+			if (!empty($attrs[$key]) && is_numeric($attrs[$key])) {
+				$classes[] = 'agl-in-' . $suffix . '-' . ($attrs[$key] + 0);
+			}
+		}
+		if (!empty($attrs['aglRepeat'])) {
+			$classes[] = 'agl-in-repeat';
+		}
+		if (!empty($attrs['aglLockToScrollbar'])) {
+			$classes[] = 'agl-in-lockToScrollbar';
+		}
+
+		return $classes;
+	}
+
+	// Attributes come from post content, so don't trust their type
+	private function is_class_token($value)
+	{
+		return is_string($value) && 1 === preg_match('/^[A-Za-z0-9_-]+$/', $value);
 	}
 
 	public function admin_menu()

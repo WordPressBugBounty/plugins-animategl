@@ -4,8 +4,8 @@ License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
 Tags: animation, animate, gutenberg animations, block animations, elementor animations, scroll animations, hover animations, animations for blocks, entrance animation, motion effects, image effects, animation effects, visual effects
 Requires at least: 5.0
-Tested up to: 6.8
-Stable tag: 1.4.24
+Tested up to: 7.1
+Stable tag: 1.4.25
 Requires PHP: 5.4
 
  CSS & WebGL Animations for Elementor & Gutenberg Blocks Animations, animations from CSS class, scroll animations, lock to scrollbar. Add eye-catching entrance animations to your website that bring your images to life and enhance the visual appeal of your web pages. Customize animations with CSS classes or a visual editor, and create unique and creative effects that will make your website stand out.
@@ -158,6 +158,18 @@ Open Image settings > Advanced > Layout > CSS Classes, add the CSS class of the 
 WebGL animatinos are best to use for simple elements like headings, buttons or images. For more complex elements like sections it is better to use CSS animatinos.
 
 == Changelog ==
+
+= 1.4.25 =
+* Fix: Block editor didn't load on WordPress 7.1 ("Cannot read properties of null (reading 'appendChild')" in animategl.min.js)
+* Fix: Animated blocks were invisible in the block editor
+* Fix: Dynamic blocks failed with "Invalid parameter(s): attributes", and didn't animate on the front end
+* Fix: PHP warnings and editor errors with Elementor 3.26 and later
+* Fix: An element with a WebGL animation could stay hidden if the WebGL renderer failed to load
+* Change: Animations no longer play inside the block editor, only on the front end. Running them in the editor made it crash on WordPress 7.1.
+* Tested with WordPress 7.1
+
+= 1.4.24 =
+* Security: Only administrators can save AnimateGL settings. The settings AJAX action no longer accepts requests from logged-out users and checks the manage_options capability.
 
 = 1.4.23 =
 * Fix: CSS animation repeat

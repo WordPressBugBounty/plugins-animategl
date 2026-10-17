@@ -54,9 +54,9 @@ class AnimateGL_El
 
 			if ($agl_in_name) {
 				$classes = $agl_in_name == 'custom' ? 'agl' : 'agl agl-' . $agl_in_name . $element->get_settings('agl_in_direction');
-				$duration = $element->get_settings('agl_in_duration')['size'];
-				$delay = $element->get_settings('agl_in_delay')['size'];
-				$distance = $element->get_settings('agl_in_distance')['size'];
+				$duration = $this->get_slider_size($element, 'agl_in_duration', 1000);
+				$delay = $this->get_slider_size($element, 'agl_in_delay', 0);
+				$distance = $this->get_slider_size($element, 'agl_in_distance', 1);
 				$classes .= ' agl-in-duration-' . $duration;
 				$classes .= ' agl-in-delay-' . $delay;
 				$classes .= ' agl-in-distance-' . $distance;
@@ -79,7 +79,10 @@ class AnimateGL_El
 			}
 		});
 
-		wp_enqueue_script('agl-el', $this->plugin_dir_url . 'js/el.js', array('jquery'), $this->version);
+		// Front end only (this also covers the Elementor preview), not every admin and REST request
+		add_action('wp_enqueue_scripts', function () {
+			wp_enqueue_script('agl-el', $this->plugin_dir_url . 'js/el.js', array('jquery'), $this->version);
+		});
 
 		add_action('elementor/editor/after_enqueue_styles', function () {
 			wp_register_style('agl-el', $this->plugin_dir_url . 'css/el.css', array(), $this->version);
@@ -89,6 +92,13 @@ class AnimateGL_El
 		add_action('elementor/editor/after_enqueue_scripts', function () {
 			wp_enqueue_script('agl-el-editor', $this->plugin_dir_url . 'js/el-editor.js', array('jquery'), $this->version);
 		});
+	}
+
+	// Slider settings can be null (Elementor 3.26+): fall back to the control's default
+	private function get_slider_size($element, $key, $default)
+	{
+		$value = $element->get_settings($key);
+		return is_array($value) && isset($value['size']) && '' !== $value['size'] ? $value['size'] : $default;
 	}
 
 	public function add_section($element)

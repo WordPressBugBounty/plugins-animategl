@@ -2,6 +2,11 @@
 
 (function ($) {
 
+	// Slider settings can be null (Elementor 3.26+): fall back to the control's default
+	function sliderSize(setting, fallback) {
+		return setting && setting.size !== undefined && setting.size !== '' ? setting.size : fallback
+	}
+
 	$(window).on('elementor/frontend/init', function () {
 
 		const ModuleHandler = elementorModules.frontend.handlers.Base
@@ -16,9 +21,9 @@
 
 				if (elementorFrontend.isEditMode() && agl_in_name) {
 					const direction = this.getElementSettings('agl_in_direction')
-					const duration = this.getElementSettings('agl_in_duration').size
-					const delay = this.getElementSettings('agl_in_delay').size
-					const distance = this.getElementSettings('agl_in_distance').size
+					const duration = sliderSize(this.getElementSettings('agl_in_duration'), 1000)
+					const delay = sliderSize(this.getElementSettings('agl_in_delay'), 0)
+					const distance = sliderSize(this.getElementSettings('agl_in_distance'), 1)
 					const classes = agl_in_name == 'custom' ? 'agl' : `agl agl-${agl_in_name}${direction}`
 					this.$element.addClass(classes)
 					this.$element.addClass(`agl-in-duration-${duration}`)
@@ -61,9 +66,9 @@
 				// add agl classes if entrance animation is selected
 				if (agl_in_name) {
 					const direction = settings['agl_in_direction']
-					const duration = settings['agl_in_duration'].size
-					const delay = settings['agl_in_delay'].size
-					const distance = settings['agl_in_distance'].size
+					const duration = sliderSize(settings['agl_in_duration'], 1000)
+					const delay = sliderSize(settings['agl_in_delay'], 0)
+					const distance = sliderSize(settings['agl_in_distance'], 1)
 					const easing = settings['agl_in_easing']
 					const repeat = settings['agl_in_repeat'] == 'yes'
 					const lockToScrollbar = settings['agl_in_lockToScrollbar'] == 'yes'

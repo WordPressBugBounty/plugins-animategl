@@ -2,142 +2,111 @@
 Contributors: creativeinteractivemedia
 License: GPLv3
 License URI: http://www.gnu.org/licenses/gpl-3.0.html
-Tags: animation, animate, gutenberg animations, block animations, elementor animations, scroll animations, hover animations, animations for blocks, entrance animation, motion effects, image effects, animation effects, visual effects
+Tags: animation, scroll animation, animate on scroll, gutenberg animation, elementor animation
 Requires at least: 5.0
 Tested up to: 7.1
 Stable tag: 1.4.25
 Requires PHP: 5.4
 
- CSS & WebGL Animations for Elementor & Gutenberg Blocks Animations, animations from CSS class, scroll animations, lock to scrollbar. Add eye-catching entrance animations to your website that bring your images to life and enhance the visual appeal of your web pages. Customize animations with CSS classes or a visual editor, and create unique and creative effects that will make your website stand out.
+Animate on scroll for Gutenberg blocks and Elementor. CSS fade, slide, zoom and wipe, plus WebGL bend, flip and peel effects. No code needed.
 
 == Description ==
 
-[Demo](https://animategl.com/ "Live AnimateGL demo") | [Documentation](https://creativeinteractivemedia.gitbook.io/animategl-wp/ "Documentation") | [Support](https://wordpress.org/support/plugin/animategl/ "Support") 
+[Live demo](https://animategl.com/ "Live AnimateGL demo") | [Documentation](https://creativeinteractivemedia.gitbook.io/animategl-wp/ "Documentation") | [Support](https://wordpress.org/support/plugin/animategl/ "Support")
 
-Add CSS and WebGL animations easily to any element on the website with [AnimateGL](https://animategl.com/) plugin. 
+**Bring your pages to life with scroll animations.** AnimateGL animates headings, text, images, buttons, cards and whole sections as they scroll into view. Select a Gutenberg block or an Elementor widget, pick an entrance animation, and publish. No code, and no new page builder to learn.
+
+Most animation plugins stop at fade and slide. AnimateGL has those as fast CSS animations, and it adds **WebGL animations that bend, flip, peel and stretch an element in 3D**. CSS can't do these effects. They make a hero heading, a product image or a call-to-action button stand out.
 
 [youtube https://youtu.be/0K6XG-ZrCjg]
 
-Add CSS and WebGL animations in Elementor, Block editor or any other builder. Customize direction, duration, delay and easing for each animation. Choose simple CSS animations like fade, slide, zoom and wipe or creative WebGL animations like bend, flip, stretch or directional fade. Create custom entrance animation with visual editor. AnimateGL is lightweight, fast, and easy to use, making it the perfect choice for web designers looking to enhance their website's visual appeal.
+= Why AnimateGL =
 
-== Features ==
+* **Works where you already build.** Animate any block in the Gutenberg block editor, including dynamic blocks and blocks from other plugins. In Elementor, animate any section, column, container or widget. In any other theme or page builder, add a CSS class.
+* **Effects you won't find in other plugins.** 8 WebGL animations with 3D distortion, page peel and directional fade, next to 5 GPU-accelerated CSS animations.
+* **65 ready-made presets.** Each of the 13 animations plays centered or from the left, right, top or bottom. Every preset has a live preview in the admin.
+* **Full control.** Set the direction, distance, duration, delay and easing. Play an animation once or every time it enters the viewport, or tie its progress to the scrollbar.
+* **Fast.** The script is about 37 KB gzipped. The WebGL renderer loads only on pages that use a WebGL animation.
+* **Free, no sign-up.** All 13 animations and 65 presets are in the free plugin.
 
-* Add Entrance animation to any element or block
-* CSS Entrance animations Fade, Zoom In, Zoom out, Wipe, Slide Reveal
-* WebGL Entrance animations Bend, Flip, Peel, Wipe, Zoom, Directional Fade
-* Fully customizable animation direction, duration, delay, easing
-* Gutenberg Blocks animations
-* Elementor animations
-* CSS class animations
-* Nested animations
-* Lock to scrollbar
-* Repeat or play once on first enter the viewport
-* Live editor for creating custom animation
-* Preset animations
-* Scroll triggered Entrance animations
-* Easy to use
-* Lightweight
-* Great performance 
+= How it works =
 
-== CSS animations ==
+1. Install and activate AnimateGL.
+2. Select a block in the block editor, or an element in Elementor, and choose an entrance animation.
+3. Adjust the direction, duration and delay, and publish.
 
-CSS entrance animations are GPU accelerated and animate CSS properties opacity, transform and clip path in different combinations. CSS animations can be added to any element or block. Available CSS animations are Fade, Zoom In, Zoom Out, Wipe and Slide with settings for direction, distance, duration, delay and easing. With combination of fade, zoom, direction, easing and delay you can create unlimited number of creative elegant animations. More CSS animations coming soon.
+The animation plays on your live site when a visitor scrolls the element into view.
 
-CSS Entrance animations: 
+= Animations included =
 
-* Fade
-* Zoom In
-* Zoom Out
-* Wipe
-* Slide
+**CSS entrance animations** (GPU accelerated): Fade, Zoom In, Zoom Out, Wipe, Slide.
 
-== WebGL animations ==
+**WebGL entrance animations**: Fade (directional), Slide, Stretch, Bend, Flip, Peel, Zoom In, Zoom Out.
 
-WebGL animations convert any element to image with html2canvas.js, then apply effects to image with custom GLSL shaders. Best use is for simple elements like heading, button or image. With WebGL we can create effects that are not possible with CSS, like 3D distortions or gradient fade, and add those effects to any element on the page. 
+Ideas for using them:
 
-WebGL Entrance animations: 
+* Fade in a hero heading, then slide in its button with a short delay
+* Stagger a row of cards or blog posts by giving each one a longer delay
+* Reveal images in a portfolio or gallery with a wipe or zoom
+* Peel or flip in a call-to-action banner
+* Bend or stretch a product image as it scrolls into view
 
-* Fade
-* Slide
-* Stretch
-* Bend
-* Flip
-* Zoom
-* Peel
+= Scroll animations (animate on scroll) =
 
-== Lightweight ==
+Entrance animations are scroll triggered. Each one plays when its element enters the viewport, by default once 70% of the element (or 200px of it) is visible.
 
-Only 35kb for CSS animations, additional 45kb if WebGL animations are used.
+Turn on **Repeat** to play the animation every time the element scrolls back into view. Turn on **Lock to scrollbar** to make the animation follow the scroll position instead of a fixed duration: as you scroll down, the element animates in until it reaches the middle of the viewport.
 
-== Elementor animations ==
+= CSS animations =
 
-[youtube https://youtu.be/LKEA4IO1yHM]
+CSS entrance animations are GPU accelerated and animate opacity, transform and clip-path. Combine fade, zoom, slide or wipe with direction, distance, easing and delay to create elegant reveal animation effects for headings, text, buttons, images and whole sections. They work on any element, however complex.
 
-Add Entrance animation to any element in Elementor. Select animation type, direction, distance, delay, duration and easing in the Element Advanced tab.
+= WebGL animations =
 
-== Gutenberg Blocks animations ==
+WebGL animations go beyond CSS. AnimateGL renders the element to an image with html2canvas, then animates it with custom GLSL shaders for 3D distortions, page peel and gradient (directional) fade effects. Use these motion effects, image effects and visual effects on simple elements like headings, buttons and images.
+
+= Gutenberg block animations =
 
 [youtube https://youtu.be/oPivzJHFIek]
 
-Add Entrance animation to any Gutenberg block. Select animation type, direction, distance, delay, duration and easing in the block inspector controls.
+Add animations for blocks in the Gutenberg block editor, including dynamic blocks like Latest Posts. Select the block, open the AnimateGL panel in the block settings sidebar, and choose the animation type, direction, distance, duration, delay and easing. Your blocks stay visible while you edit.
 
-== Entrance Animations via CSS class ==
+= Elementor animations =
 
-If you don't use Elementor or Gutenberg blocks, you can still use AnimateGL via CSS classes. Add one of preset entrance animations or custom entrance animation to any element on the page by adding the animation CSS class.
+[youtube https://youtu.be/LKEA4IO1yHM]
 
-More animations available with [Entrance pack](https://codecanyon.net/item/animategl-animations-for-wordpress-entrance-pack/45375689?s=org): 
+Add an entrance animation to any Elementor section, column, container or widget. Open the element's Advanced tab and choose the animation type, direction, distance, duration, delay and easing in the AnimateGL section.
 
-* Circle (CSS)
-* Square (CSS)
-* Line (CSS)
+= CSS class animations for any page builder =
 
-Customize direction, duration, easing and delay for each animations
- 
-Customize animation properties via CSS class:
+Not using Gutenberg or Elementor? Add an animation's CSS class to any element in Visual Composer, another page builder or your theme, for example `agl agl-fadeCSSUp` or `agl agl-bendLeft`. The AnimateGL > Entrance Presets admin page lists every preset animation with a live preview and a CSS class you can copy.
 
-* Fade - with options for directional fade and threshold
-* Translate - with options for x, y, and z direction
-* Rotation - with options for x, y, and z axis
-* Corners Distortion - for added animation variety
-* Duration - customize the length of the animation
-* Delay - customize the start time of the animation
-* Easing - customize the speed and flow of the animation
+= Animation Editor =
 
-== Repeat ==
+Design your own entrance animation in the visual Animation Editor on the AnimateGL admin page, then apply it to any element with the `agl` class. You can set:
 
-By default, entrance animation will play when element enters the viewport for the first time. With option repeat enabled, the animation will play each time element enters the viewport.
+* Fade, with directional fade and threshold
+* Translate along the x, y and z axes
+* Rotation around the x, y and z axes
+* Corners distortion
+* Duration, delay and easing
 
-== Lock to scrollbar ==
+You can set the same properties with CSS classes.
 
-Instead of fixed duration entrance animation, we can make the animation progress depend on the scroll position of the element. If the element is below the viewport, the animation progress will be 0. As we scroll the page down, and element is moving towards the middle of the viewport, the animation progresses. The end of animation is when element reches the middle of the viewport. Lock to scrollbar option can be enabled for any animation.
+= Mouse and hover effects =
 
-== Mouse Effects ==
+The Animation Editor also has mouse-driven distortion effects for interactive hover animations, such as Pull, with options for strength, size, RGB shift and ease.
 
-AnimateGL also offers mouse-driven distortion effects, including:
+= More animations =
 
-* Pull - with options for strength, size, RGB shift, and ease
+Get more entrance animations with add-ons:
 
-== Scroll triggered animations ==
+* [Entrance Pack](https://codecanyon.net/item/animategl-animations-for-wordpress-entrance-pack/45375689?s=org): Circle, Square and Line CSS animations
+* [Fade Pack](https://codecanyon.net/item/animategl-animations-for-wordpress-entrance-fade-pack/46383362): more fade animations
 
-Entrance animation is played when when the element enters the viewport, when it becomes visible on the screen. 
+= Help us improve =
 
-== Viewport entrance threshold ==
-
-By default, entrance animation start to play when 70% or 200px of the element enters the viewport.
-
-== Live Editor ==
-
-Use live editor to create your custom entrance animation.
-
-Enhance the visual appeal of your website with AnimateGL, the most powerful and advanced WebGL animation plugin for WordPress. With its lightweight 33kb gzipped size and no dependencies, AnimateGL is fast, easy to use, and the perfect choice for web designers looking to add unique animations to their website.
-
-== Use with any page builder ==
-
-AnimateGL can be used with any page buidler: Elementor and Gutenberg blocks editor, Visual composer and others, because animations can be added simply by adding a CSS class. Add unique animations in Elementor, Visual Composer or Guteberg blocks editor with AnimateGL.
-
-== Help us improve ==
-
-If you have any problem or feature request for this plugin, please feel free to [open a ticket](https://wordpress.org/support/plugin/animategl/)!
+If you run into a problem or want a new feature, please [open a support topic](https://wordpress.org/support/plugin/animategl/). If AnimateGL helps your site, a [review](https://wordpress.org/support/plugin/animategl/reviews/#new-post) helps other people find it.
 
 == Frequently Asked Questions ==
 

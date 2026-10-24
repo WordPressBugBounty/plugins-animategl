@@ -50,10 +50,12 @@ class AnimateGL_El
 		add_action('elementor/element/after_add_attributes', function ($element) {
 
 			$agl_in_name = $element->get_settings('agl_in_name');
+			$classes = '';
 
-
-			if ($agl_in_name) {
-				$classes = $agl_in_name == 'custom' ? 'agl' : 'agl agl-' . $agl_in_name . $element->get_settings('agl_in_direction');
+			// Settings end up in the class attribute, so accept only class-safe names and numbers
+			if ($agl_in_name && AnimateGL::is_class_token($agl_in_name)) {
+				$direction = $element->get_settings('agl_in_direction');
+				$classes = $agl_in_name == 'custom' ? 'agl' : 'agl agl-' . $agl_in_name . (AnimateGL::is_class_token($direction) ? $direction : '');
 				$duration = $this->get_slider_size($element, 'agl_in_duration', 1000);
 				$delay = $this->get_slider_size($element, 'agl_in_delay', 0);
 				$distance = $this->get_slider_size($element, 'agl_in_distance', 1);
@@ -61,7 +63,7 @@ class AnimateGL_El
 				$classes .= ' agl-in-delay-' . $delay;
 				$classes .= ' agl-in-distance-' . $distance;
 				$easing = $element->get_settings('agl_in_easing');
-				if ($easing)
+				if ($easing && AnimateGL::is_class_token($easing))
 					$classes .= ' agl-in-easing-' . $easing;
 				$repeat = $element->get_settings('agl_in_repeat');
 				if ($repeat == 'yes')
@@ -69,12 +71,14 @@ class AnimateGL_El
 				$loctToScrollbar = $element->get_settings('agl_in_lockToScrollbar');
 					if ($loctToScrollbar == 'yes')
 						$classes .= ' agl-in-lockToScrollbar';
-				$atts = array();
-				$atts['class'] = $classes;
+			}
 
+			// The Elementor side of animategl_block_classes, for the controls added on animategl_elementor_controls
+			$classes = trim((string) apply_filters('animategl_elementor_classes', $classes, $element));
+			if ($classes) {
 				$element->add_render_attribute(
 					'_wrapper',
-					$atts
+					array('class' => $classes)
 				);
 			}
 		});
@@ -98,7 +102,7 @@ class AnimateGL_El
 	private function get_slider_size($element, $key, $default)
 	{
 		$value = $element->get_settings($key);
-		return is_array($value) && isset($value['size']) && '' !== $value['size'] ? $value['size'] : $default;
+		return is_array($value) && isset($value['size']) && is_numeric($value['size']) ? $value['size'] + 0 : $default;
 	}
 
 	public function add_section($element)
@@ -118,25 +122,25 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_name',
 			[
-				'label' => __('Entrance Animation', 'animate-gl'),
+				'label' => __('Entrance Animation', 'animategl'),
 				'type' => Controls_Manager::SELECT,
 				'separator' => 'before',
 				'options' => [
-					// '' => __('None', 'animate-gl'),
-					// 'fadeCSS' => __('Fade', 'animate-gl'),
-					// 'zoomInCSS' => __('Zoom In', 'animate-gl'),
-					// 'zoomOutCSS' => __('Zoom Out', 'animate-gl'),
-					// 'wipeCSS' => __('Wipe', 'animate-gl'),
-					// 'slideCSS' => __('Slide', 'animate-gl'),
-					// 'fade' => __('Fade WebGL', 'animate-gl'),
-					// 'flip' => __('Flip WebGL', 'animate-gl'),
-					// 'slide' => __('Slide WebGL', 'animate-gl'),
-					// 'stretch' => __('Stretch WebGL', 'animate-gl'),
-					// 'bend' => __('Bend WebGL', 'animate-gl'),
-					// 'peel' => __('Peel WebGL', 'animate-gl'),
-					// 'wipe' => __('Wipe WebGL', 'animate-gl'),
-					// 'zoomIn' => __('Zoom In WebGL', 'animate-gl'),
-					// 'custom' => __('Custom', 'animate-gl'),
+					// '' => __('None', 'animategl'),
+					// 'fadeCSS' => __('Fade', 'animategl'),
+					// 'zoomInCSS' => __('Zoom In', 'animategl'),
+					// 'zoomOutCSS' => __('Zoom Out', 'animategl'),
+					// 'wipeCSS' => __('Wipe', 'animategl'),
+					// 'slideCSS' => __('Slide', 'animategl'),
+					// 'fade' => __('Fade WebGL', 'animategl'),
+					// 'flip' => __('Flip WebGL', 'animategl'),
+					// 'slide' => __('Slide WebGL', 'animategl'),
+					// 'stretch' => __('Stretch WebGL', 'animategl'),
+					// 'bend' => __('Bend WebGL', 'animategl'),
+					// 'peel' => __('Peel WebGL', 'animategl'),
+					// 'wipe' => __('Wipe WebGL', 'animategl'),
+					// 'zoomIn' => __('Zoom In WebGL', 'animategl'),
+					// 'custom' => __('Custom', 'animategl'),
 
 				],
 				'default' => '',
@@ -148,15 +152,15 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_direction',
 			[
-				'label' => __('Direction', 'animate-gl'),
+				'label' => __('Direction', 'animategl'),
 				'type' => Controls_Manager::SELECT,
 				'separator' => 'before',
 				'options' => [
-					'' => __('Default', 'animate-gl'),
-					'Left' => __('Left', 'animate-gl'),
-					'Right' => __('Right', 'animate-gl'),
-					'Up' => __('Up', 'animate-gl'),
-					'Down' => __('Down', 'animate-gl'),
+					'' => __('Default', 'animategl'),
+					'Left' => __('Left', 'animategl'),
+					'Right' => __('Right', 'animategl'),
+					'Up' => __('Up', 'animategl'),
+					'Down' => __('Down', 'animategl'),
 
 				],
 				'default' => '',
@@ -171,7 +175,7 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_duration',
 			[
-				'label' => esc_html__('Duration', 'animate-gl'),
+				'label' => esc_html__('Duration', 'animategl'),
 				'type' => Controls_Manager::SLIDER,
 				'range' => [
 					'ms' => [
@@ -196,7 +200,7 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_delay',
 			[
-				'label' => esc_html__('Delay', 'animate-gl'),
+				'label' => esc_html__('Delay', 'animategl'),
 				'type' => Controls_Manager::SLIDER,
 				'range' => [
 					'ms' => [
@@ -222,7 +226,7 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_distance',
 			[
-				'label' => esc_html__('Distance', 'animate-gl'),
+				'label' => esc_html__('Distance', 'animategl'),
 				'type' => Controls_Manager::SLIDER,
 				'range' => [
 					'ms' => [
@@ -248,7 +252,7 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_repeat',
 			[
-				'label' => esc_html__('Repeat', 'animate-gl'),
+				'label' => esc_html__('Repeat', 'animategl'),
 				'type' => Controls_Manager::SWITCHER,
 				'default' => 'no',
 				'render_type'        => 'none',
@@ -262,7 +266,7 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_lockToScrollbar',
 			[
-				'label' => esc_html__('Lock to Scrollbar', 'animate-gl'),
+				'label' => esc_html__('Lock to Scrollbar', 'animategl'),
 				'type' => Controls_Manager::SWITCHER,
 				'default' => 'no',
 				'render_type'        => 'none',
@@ -276,27 +280,27 @@ class AnimateGL_El
 		$element->add_control(
 			'agl_in_easing',
 			[
-				'label' => __('Easing', 'animate-gl'),
+				'label' => __('Easing', 'animategl'),
 				'type' => Controls_Manager::SELECT,
 				'separator' => 'before',
 				'options' => [
-					'' => __('Default', 'animate-gl'),
-					'linear' => __('Linear', 'animate-gl'),
-					'easeOutSine' => __('easeOutSine', 'animate-gl'),
-					'easeInSine' => __('easeInSine', 'animate-gl'),
-					'easeInOutSine' => __('easeInOutSine', 'animate-gl'),
-					'easeOutQuad' => __('easeOutQuad', 'animate-gl'),
-					'easeInQuad' => __('easeInQuad', 'animate-gl'),
-					'easeInOutQuad' => __('easeInOutQuad', 'animate-gl'),
-					'easeOutCubic' => __('easeOutCubic', 'animate-gl'),
-					'easeInCubic' => __('easeInCubic', 'animate-gl'),
-					'easeInOutCubic' => __('easeInOutCubic', 'animate-gl'),
-					'easeOutExpo' => __('easeOutExpo', 'animate-gl'),
-					'easeInExpo' => __('easeInExpo', 'animate-gl'),
-					'easeInOutExpo' => __('easeInOutExpo', 'animate-gl'),
-					'easeOutBack' => __('easeOutBack', 'animate-gl'),
-					'easeInOutBack' => __('easeInOutBack', 'animate-gl'),
-					'easeInBack' => __('easeInBack', 'animate-gl'),
+					'' => __('Default', 'animategl'),
+					'linear' => __('Linear', 'animategl'),
+					'easeOutSine' => __('easeOutSine', 'animategl'),
+					'easeInSine' => __('easeInSine', 'animategl'),
+					'easeInOutSine' => __('easeInOutSine', 'animategl'),
+					'easeOutQuad' => __('easeOutQuad', 'animategl'),
+					'easeInQuad' => __('easeInQuad', 'animategl'),
+					'easeInOutQuad' => __('easeInOutQuad', 'animategl'),
+					'easeOutCubic' => __('easeOutCubic', 'animategl'),
+					'easeInCubic' => __('easeInCubic', 'animategl'),
+					'easeInOutCubic' => __('easeInOutCubic', 'animategl'),
+					'easeOutExpo' => __('easeOutExpo', 'animategl'),
+					'easeInExpo' => __('easeInExpo', 'animategl'),
+					'easeInOutExpo' => __('easeInOutExpo', 'animategl'),
+					'easeOutBack' => __('easeOutBack', 'animategl'),
+					'easeInOutBack' => __('easeInOutBack', 'animategl'),
+					'easeInBack' => __('easeInBack', 'animategl'),
 
 				],
 				'default' => '',
@@ -307,6 +311,9 @@ class AnimateGL_El
 				],
 			]
 		);
+
+		// Add controls to the AnimateGL section. Turn their settings into classes with animategl_elementor_classes.
+		do_action('animategl_elementor_controls', $element);
 
 		$element->end_controls_section(); // END ENTRANCE SECTION / PANEL
 

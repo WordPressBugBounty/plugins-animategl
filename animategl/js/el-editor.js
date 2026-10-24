@@ -44,11 +44,23 @@ window.addEventListener('load', function () {
 					aglNameDowpdown.appendChild(groupWebGL);
 					groupWebGL.label = 'WebGL'
 
+					// Entries added by others (the custom animations of AnimateGL Pro) say their type and that
+					// they're custom; the built-in ones have CSS in their name
+					let groupCustom
 					entranceNames.forEach(function (obj) {
 						const newOption = document.createElement("option");
+						const isCSS = obj.type ? obj.type === 'css' : obj.name.includes('CSS')
 						newOption.value = obj.name;
 						newOption.text = obj.title;
-						if(obj.name.includes('CSS'))
+						if (obj.custom) {
+							if (!groupCustom) {
+								groupCustom = document.createElement("optgroup");
+								groupCustom.label = 'My animations'
+								aglNameDowpdown.appendChild(groupCustom);
+							}
+							newOption.text = obj.title + (isCSS ? ' (CSS)' : ' (WebGL)');
+							groupCustom.appendChild(newOption)
+						} else if (isCSS)
 							groupCSS.appendChild(newOption)
 						else
 							groupWebGL.appendChild(newOption)
@@ -72,8 +84,11 @@ window.addEventListener('load', function () {
 					function initDirections(name) {
 						aglDirectionDowpdown.innerHTML = ''
 						const directions = []
+						// A custom animation is one preset, with no directions
+						const custom = entranceNames.some(function (obj) { return obj.name === name && obj.custom })
 						for (let presetName in presets) {
-							if (presetName.includes(name)) {
+							const isCustom = entranceNames.some(function (obj) { return obj.name === presetName && obj.custom })
+							if (custom ? presetName === name : presetName.includes(name) && !isCustom) {
 								const direction = presetName.replace(name, '')
 								if(!direction.includes('CSS')){
 									directions.push(direction)

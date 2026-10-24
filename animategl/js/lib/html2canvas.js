@@ -3,8 +3,8 @@
  * Copyright (c) 2022 Niklas von Hertzen <https://hertzen.com>
  * Released under MIT License
  *
- * Patched for AnimateGL: text baseline (FontMetrics.parseMetrics) and image size
- * (renderReplacedElement). Readable source: html2canvas.js
+ * Patched for AnimateGL: text baseline (FontMetrics.parseMetrics), image size (renderReplacedElement)
+ * and CSS Color 4 colours (SUPPORTED_COLOR_FUNCTIONS). Readable source: html2canvas.js
  */
 (function (global, factory) {
     typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
@@ -1837,11 +1837,142 @@
         var b = hue2rgb(t1, t2, h - 1 / 3);
         return pack(r * 255, g * 255, b * 255, a);
     };
+    // AnimateGL patch: CSS Color 4 functions. Browsers give color-mix() as color(srgb …) in computed styles
+    // and keep oklch(), oklab(), lab() and lch(), which themes use (Twenty Twenty-Five, Ollie, Kadence).
+    // Converted to sRGB and clipped to its gamut.
+    var color4Values = function (args) {
+        var values = [];
+        var alpha = 1;
+        var afterSlash = false;
+        args.filter(nonFunctionArgSeparator).forEach(function (token) {
+            if (token.type === 6 /* DELIM_TOKEN */ && token.value === '/') {
+                afterSlash = true;
+                return;
+            }
+            if (afterSlash) {
+                alpha = token.type === 16 /* PERCENTAGE_TOKEN */ ? token.number / 100 : token.type === 17 /* NUMBER_TOKEN */ ? token.number : 1;
+            }
+            else {
+                values.push(token);
+            }
+        });
+        return { values: values, alpha: alpha };
+    };
+    // number, percentage (100% = full), or none
+    var color4Number = function (token, full) {
+        if (!token || token.type === 20 /* IDENT_TOKEN */) {
+            return 0;
+        }
+        return token.type === 16 /* PERCENTAGE_TOKEN */ ? (token.number / 100) * full : token.number;
+    };
+    var color4Hue = function (context, token) {
+        if (!token || token.type === 20 /* IDENT_TOKEN */) {
+            return 0;
+        }
+        return token.type === 17 /* NUMBER_TOKEN */ ? deg(token.number) : angle.parse(context, token);
+    };
+    var gammaEncode = function (c) {
+        var abs = Math.abs(c);
+        return abs > 0.0031308 ? Math.sign(c) * (1.055 * Math.pow(abs, 1 / 2.4) - 0.055) : 12.92 * c;
+    };
+    var gammaDecode = function (c) {
+        var abs = Math.abs(c);
+        return abs > 0.04045 ? Math.sign(c) * Math.pow((abs + 0.055) / 1.055, 2.4) : c / 12.92;
+    };
+    var multiply = function (m, v) {
+        return [0, 1, 2].map(function (i) { return m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2]; });
+    };
+    var XYZ_D65_TO_LINEAR_SRGB = [
+        [3.2409699419, -1.5373831776, -0.4986107603],
+        [-0.9692436363, 1.8759675015, 0.0415550574],
+        [0.0556300797, -0.2039769589, 1.0569715142]
+    ];
+    var XYZ_D50_TO_LINEAR_SRGB = [
+        [3.1338561, -1.6168667, -0.4906146],
+        [-0.9787684, 1.9161415, 0.033454],
+        [0.0719453, -0.2289914, 1.4052427]
+    ];
+    var LINEAR_P3_TO_LINEAR_SRGB = [
+        [1.2249401763, -0.2249404764, 0],
+        [-0.0420569547, 1.0420571874, 0],
+        [-0.0196375546, -0.0786360456, 1.0982735856]
+    ];
+    var packLinear = function (rgb, alpha) {
+        var c = rgb.map(function (v) { return Math.round(Math.min(1, Math.max(0, gammaEncode(v))) * 255); });
+        return pack(c[0], c[1], c[2], Math.min(1, Math.max(0, alpha)));
+    };
+    var oklabToLinear = function (l, a, b) {
+        var l_ = Math.pow(l + 0.3963377774 * a + 0.2158037573 * b, 3);
+        var m_ = Math.pow(l - 0.1055613458 * a - 0.0638541728 * b, 3);
+        var s_ = Math.pow(l - 0.0894841775 * a - 1.291485548 * b, 3);
+        return [
+            4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+            -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+            -0.0041960863 * l_ - 0.7034186147 * m_ + 1.707614701 * s_
+        ];
+    };
+    var labToLinear = function (l, a, b) {
+        var e = 216 / 24389;
+        var k = 24389 / 27;
+        var fy = (l + 16) / 116;
+        var fx = fy + a / 500;
+        var fz = fy - b / 200;
+        var xyz = [
+            (Math.pow(fx, 3) > e ? Math.pow(fx, 3) : (116 * fx - 16) / k) * 0.96422,
+            l > k * e ? Math.pow(fy, 3) : l / k,
+            (Math.pow(fz, 3) > e ? Math.pow(fz, 3) : (116 * fz - 16) / k) * 0.82521
+        ];
+        return multiply(XYZ_D50_TO_LINEAR_SRGB, xyz);
+    };
+    var oklab = function (_context, args) {
+        var _a = color4Values(args), v = _a.values;
+        return packLinear(oklabToLinear(color4Number(v[0], 1), color4Number(v[1], 0.4), color4Number(v[2], 0.4)), _a.alpha);
+    };
+    var oklch = function (context, args) {
+        var _a = color4Values(args), v = _a.values;
+        var c = color4Number(v[1], 0.4);
+        var h = color4Hue(context, v[2]);
+        return packLinear(oklabToLinear(color4Number(v[0], 1), c * Math.cos(h), c * Math.sin(h)), _a.alpha);
+    };
+    var lab = function (_context, args) {
+        var _a = color4Values(args), v = _a.values;
+        return packLinear(labToLinear(color4Number(v[0], 100), color4Number(v[1], 125), color4Number(v[2], 125)), _a.alpha);
+    };
+    var lch = function (context, args) {
+        var _a = color4Values(args), v = _a.values;
+        var c = color4Number(v[1], 150);
+        var h = color4Hue(context, v[2]);
+        return packLinear(labToLinear(color4Number(v[0], 100), c * Math.cos(h), c * Math.sin(h)), _a.alpha);
+    };
+    // color(<space> r g b / a). Spaces without a conversion here are read as sRGB.
+    var colorSpace = function (_context, args) {
+        var _a = color4Values(args), v = _a.values;
+        var space = v[0] && v[0].type === 20 /* IDENT_TOKEN */ ? v[0].value.toLowerCase() : 'srgb';
+        var c = [1, 2, 3].map(function (i) { return color4Number(v[i], 1); });
+        switch (space) {
+            case 'srgb-linear':
+                return packLinear(c, _a.alpha);
+            case 'display-p3':
+                return packLinear(multiply(LINEAR_P3_TO_LINEAR_SRGB, c.map(gammaDecode)), _a.alpha);
+            case 'xyz':
+            case 'xyz-d65':
+                return packLinear(multiply(XYZ_D65_TO_LINEAR_SRGB, c), _a.alpha);
+            case 'xyz-d50':
+                return packLinear(multiply(XYZ_D50_TO_LINEAR_SRGB, c), _a.alpha);
+            default:
+                return packLinear(c.map(gammaDecode), _a.alpha);
+        }
+    };
     var SUPPORTED_COLOR_FUNCTIONS = {
         hsl: hsl,
         hsla: hsl,
         rgb: rgb,
-        rgba: rgb
+        rgba: rgb,
+        color: colorSpace,
+        oklab: oklab,
+        oklch: oklch,
+        lab: lab,
+        lch: lch
     };
     var parseColor = function (context, value) {
         return color$1.parse(context, Parser.create(value).parseComponentValue());
@@ -6585,6 +6716,10 @@
 			img.style.margin = '0';
 			img.style.padding = '0';
 			img.style.verticalAlign = 'baseline';
+			// keep the probe image on the text's line: themes often set img { display: block }, which drops it a line
+			// lower and moves all text in the texture down (AnimateGL patch)
+			img.style.setProperty('display', 'inline', 'important');
+			img.style.setProperty('float', 'none', 'important');
 			span.style.fontFamily = fontFamily;
 			span.style.fontSize = fontSize;
 			span.style.margin = '0';

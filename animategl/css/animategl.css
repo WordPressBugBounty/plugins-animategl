@@ -1,5 +1,11 @@
-.agl {
+/* Hidden only while JavaScript runs (agl-js on <html>), so content stays visible without it */
+.agl-js .agl {
 	visibility: hidden;
+}
+
+/* No entrance: shown as itself from the start, drawn with WebGL only for its scroll and hover effects */
+.agl-js .agl.agl-in-none {
+	visibility: inherit;
 }
 
 .agl-viewport-height {

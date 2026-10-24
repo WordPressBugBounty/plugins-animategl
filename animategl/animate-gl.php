@@ -1,23 +1,31 @@
 <?php
 
 /*
-Plugin Name: AnimateGL 
-Plugin URI: http://codecanyon.net/user/creativeinteractivemedia
-Description: Advanced Animations and WebGL Effects Plugin
-Version: 1.4.25
+Plugin Name: AnimateGL – Scroll & Entrance Animations for Blocks and Elementor
+Plugin URI: https://animategl.com/
+Description: Scroll and entrance animations for Gutenberg blocks, Elementor and any element via CSS classes. CSS animations plus WebGL effects.
+Version: 1.5.0
+Requires at least: 6.6
+Requires PHP: 7.4
 Author: creativeinteractivemedia
-Author URI: http://codecanyon.net/user/creativeinteractivemedia
+Author URI: https://codecanyon.net/user/creativeinteractivemedia
 License: GPLv2 or later
-License URI: http://www.gnu.org/licenses/gpl-2.0.html
-Text Domain: animate-gl
-Domain Path: /languages
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: animategl
 */
 
 if (!defined('ABSPATH')) {
 	exit; // Exit if accessed directly
 }
 
-define('ANIMATE_GL_VERSION', '1.4.25');
+// AnimateGL Pro is a separate plugin built from this plugin's code, with its own Freemius product.
+// When it's already loaded, stop here: loading both would define the constants and classes twice.
+// Pro switches this plugin off on its next page load (PLAN.md §6.3).
+if (defined('ANIMATE_GL_VERSION')) {
+	return;
+}
+
+define('ANIMATE_GL_VERSION', '1.5.0');
 define('ANIMATE_GL_FILE', __FILE__);
 
 if (! function_exists('animategl_fs')) {

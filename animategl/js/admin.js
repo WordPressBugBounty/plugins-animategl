@@ -185,9 +185,10 @@
 
 		preview.remove()
 
-		// Effect cards play their clip while the mouse is over them
+		// Pro's effect cards play their clip while the mouse is over them. The free effects' cards run them live.
 		$(container).find('.agl-effect').each(function () {
 			const video = this.querySelector('video')
+			if (!video) return
 			this.addEventListener('mouseenter', function () {
 				const playing = video.play()
 				if (playing) playing.catch(function () {})

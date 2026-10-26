@@ -2651,6 +2651,16 @@ class Gui {
 				"easeInExpo",
 				"easeOutExpo",
 				"easeInOutExpo",
+				"easeOutBack",
+				"easeInBack",
+				"easeInOutBack",
+				"easeOutElastic",
+				"easeOutBounce",
+				"spring-soft",
+				"spring-bouncy",
+				"spring-stiff",
+				"steps-5",
+				"steps-10",
 			]).name("Easing").onFinishChange(onOptionChange)
 
 

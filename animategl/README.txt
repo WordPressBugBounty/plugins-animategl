@@ -1,10 +1,10 @@
-=== AnimateGL – Scroll & Entrance Animations for Blocks and Elementor ===
+=== AnimateGL – WebGL & CSS Scroll and Hover Animations for Gutenberg and Elementor ===
 Contributors: creativeinteractivemedia
 Tags: animation, scroll animation, animate on scroll, gutenberg animation, elementor animation
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -27,7 +27,7 @@ Most animation plugins stop at fade and slide. AnimateGL has those as fast CSS a
 * **65 ready-made presets.** Each of the 13 animations plays centered or from the left, right, top or bottom. Every preset has a live preview in the admin.
 * **Full control.** Set the direction, distance, duration, delay and easing. Play an animation once or every time it enters the viewport, or tie its progress to the scrollbar.
 * **Preview in the editor.** Click Preview animation in the block editor to see the animation before you publish.
-* **Fast.** The script is about 37 KB gzipped and loads deferred. The WebGL renderer loads only on pages that use a WebGL animation.
+* **Fast.** The core script is about 19 KB gzipped, has no dependencies and loads deferred. The WebGL renderer loads only on pages that use a WebGL animation.
 * **SEO friendly and accessible.** Content stays visible to search engines and to visitors without JavaScript. Visitors who prefer reduced motion see your content without animation.
 * **Free, no sign-up.** All 13 animations and 65 presets are in the free plugin.
 
@@ -44,6 +44,8 @@ The animation plays on your live site when a visitor scrolls the element into vi
 **CSS entrance animations** (GPU accelerated): Fade, Zoom In, Zoom Out, Wipe, Slide.
 
 **WebGL entrance animations**: Fade (directional), Slide, Stretch, Bend, Flip, Peel, Zoom In, Zoom Out.
+
+**Hover and scroll effects** (CSS, any element): Lift, Grow and Tilt while the mouse is over it, and Skew, which leans it with the scroll speed. [AnimateGL Pro](https://animategl.com/pro/) adds WebGL hover effects ([see them live](https://animategl.com/hover-effects/)) and WebGL scroll effects ([see them live](https://animategl.com/scroll-effects/)).
 
 Ideas for using them:
 
@@ -104,7 +106,7 @@ Get more entrance animations with add-ons:
 
 = Source code =
 
-Every minified script ships with its readable source in the plugin: `js/lib/animategl.js` (animation runtime), `js/lib/animategl.webgl.js` (its WebGL part, loaded only for WebGL animations), `js/lib/animategl.editor.js` (Animation Editor), `js/lib/html2canvas.js`, and `src/index.js` (block editor controls, built with @wordpress/scripts).
+Every minified script ships with its readable source in the plugin: `js/lib/animategl.js` (animation runtime), `js/lib/animategl.webgl.js` (its WebGL part, loaded only for WebGL animations), `js/lib/animategl.editor.js` (Animation Editor), `js/lib/html2canvas-pro.js` ([html2canvas-pro](https://github.com/yorickshan/html2canvas-pro) with two small fixes, marked in the file), and `src/index.js` (block editor controls, built with @wordpress/scripts).
 
 = Help us improve =
 
@@ -165,7 +167,7 @@ They are JavaScript and CSS libraries you add to a theme by hand. AnimateGL is a
 
 = Will animations slow down my website? =
 
-CSS animations are GPU accelerated, and the animation script is about 37 KB gzipped and loads deferred. The WebGL renderer loads only on pages that use a WebGL animation.
+CSS animations are GPU accelerated, and the core animation script is about 19 KB gzipped, has no dependencies and loads deferred. The WebGL renderer loads only on pages that use a WebGL animation.
 
 = Is my content visible to search engines and without JavaScript? =
 
@@ -188,6 +190,9 @@ WebGL animations work best on simple elements like headings, buttons and images.
 
 == Upgrade Notice ==
 
+= 1.6.0 =
+More easings, free Lift, Grow, Tilt and Skew effects, AnimateGL settings for Elementor 4's atomic elements, and WebGL animations on text that start sooner and end exactly in place (html2canvas-pro). Requires WordPress 6.6 and PHP 7.4.
+
 = 1.5.0 =
 * New: Settings and Docs links on the Plugins screen, and an AnimateGL menu icon
 * Improvement: The block sidebar's AnimateGL panel keeps the main settings in view and folds the rest into groups; easings have readable names
@@ -196,6 +201,19 @@ WebGL animations work best on simple elements like headings, buttons and images.
 Requires WordPress 6.6 and PHP 7.4. Adds an animation preview to the block editor, respects reduced motion, and keeps content visible without JavaScript.
 
 == Changelog ==
+
+= 1.6.0 =
+* New: Glitch, a WebGL entrance: the block arrives in bursts, bands jumping sideways and its colours splitting, and settles. As the class agl-glitch. A plain fade under reduced motion
+* Improvement: New plugin name, AnimateGL – WebGL & CSS Scroll and Hover Animations for Gutenberg and Elementor
+* New: More easings for every animation, in the block sidebar, Elementor and the class builder: Elastic, Bounce, three springs (soft, bouncy and stiff, which set their own duration), Steps, and Overshoot in and in-and-out. WebGL animations follow an overshoot too (agl-in-easing-easeOutElastic, agl-in-easing-spring-bouncy, agl-in-easing-steps-5 and the rest as classes)
+* New: Free hover effects Lift, Grow and Tilt, and the Skew scroll effect, for any block or Elementor element. Try them live in the Animations tab, which now links to animategl.com for the Pro effects instead of bundling their clips
+* Improvement: WebGL animations on text and other elements that aren't images take their snapshot with html2canvas-pro, the maintained successor of html2canvas, in place of our patched html2canvas 1.4.1. Modern CSS colors such as oklch() and color-mix() are drawn as the page shows them, images with object-fit are cropped as on the page, and text stays exactly in place when the animation ends
+* New: Elementor 4's atomic elements (Div block, Flexbox, Heading, Paragraph, Image and the rest, the default on sites that installed Elementor 4.0 or later) have the AnimateGL settings in their panel
+* Improvement: WebGL animations on text and other elements that aren't images take their snapshot a screen before they scroll into view, in idle time, so the animation starts without a pause, and don't take it again on every frame while the page scrolls
+* Fix: A WebGL animation on text or a card could end a device pixel away from where the element is drawn, so the element shifted when it came back, and its text looked a little bolder or thinner while it animated; the fade animations also left light areas too bright until they ended
+* Fix: On a Mac, WebGL animations on text looked bolder than the page's text on sites whose theme uses -webkit-font-smoothing: antialiased (many do). The snapshot's text is now drawn with the same smoothing in Chrome and Firefox, and thinned to match in Safari (the snapshot is now taken on a canvas of the page, not an off-screen one, which ignored the page's smoothing)
+* Fix: html2canvas, which takes the snapshot for WebGL animations on text, is loaded with the plugin's version, so browsers and CDNs take the new copy after an update instead of keeping the old one for a month
+* Fix: A WebGL animation on an image or a block with an image could blink out for a moment as it ended, before the image came back (in Chrome, mostly with WordPress's decoding="async" images). The WebGL frame now stays until the image is decoded and painted, drawn exactly at the animation's end and placed on the same device pixels as the element in Chrome too, so the element doesn't move a fraction of a pixel when it comes back or when a hover effect starts (also at browser zoom levels other than 100%, such as 90%)
 
 = 1.5.0 =
 * Improvement: The Fade animation (all directions, and the Default animation) is drawn with CSS instead of WebGL. It looks the same, starts sooner, keeps text exactly as the page shows it, and works with modern CSS colors. Add the class agl-webgl to an element to keep WebGL

@@ -1,6 +1,6 @@
 /*!
  * AnimateGL animategl.js includes:
- * anime.js v3.2.1 | (c) 2019 Julian Garnier | MIT License | https://animejs.com
+ * anime.js v3.2.2 | (c) 2023 Julian Garnier | MIT License | https://animejs.com
  * See NOTICES.md for the licence texts.
  */
 (function webpackUniversalModuleDefinition(root, factory) {
@@ -47,6 +47,20 @@ const own = script && script.src && script.src.match(/^([^?#]*\/)animategl(?:\.m
 
 let chunk;
 
+// The query that versions the scripts the runtime loads (WordPress's ?ver=): webglSrc's, else the core's own
+function versionQuery(options) {
+    const src = options.webglSrc;
+    const query = src && typeof src === 'string' ? src.match(/[?][^#]*/) : null;
+    return query ? query[0] : (own && own[2]) || '';
+}
+
+// html2canvas's URL (rootFolder + html2canvasSrc), with the runtime's version query, so a browser or a CDN that kept
+// the last version's copy (it's served for a month) loads the new one after an update
+function html2canvasUrl(options) {
+    const src = options.rootFolder + options.html2canvasSrc;
+    return src.indexOf('?') < 0 ? src + versionQuery(options) : src;
+}
+
 // Sets where webpack loads the chunk from
 function locate(options) {
     const src = options.webglSrc;
@@ -73,14 +87,18 @@ function loadWebGL(layer) {
             locate(layer.options);
             // The core's CSP nonce, so a strict script-src policy allows the chunk's script tag too
             if (script && script.nonce) __webpack_require__.nc = script.nonce;
-            chunk = __webpack_require__.e(/* import() | webgl */ 88).then(__webpack_require__.bind(__webpack_require__, 329));
+            chunk = __webpack_require__.e(/* import() | webgl */ 88).then(__webpack_require__.bind(__webpack_require__, 243));
         }
+        layer.html2canvasUrl = html2canvasUrl(layer.options);
         layer.webglPromise = chunk.then((webgl) => webgl.attach(layer));
     }
     return layer.webglPromise;
 }
 
+// EXTERNAL MODULE: ./js/easings.js
+var easings = __webpack_require__(314);
 ;// CONCATENATED MODULE: ./js/AnimatedPlane.js
+
 
 
 
@@ -89,6 +107,9 @@ function loadWebGL(layer) {
 // Each element gets the first of its entries in a batch, as with an observer of its own.
 const viewportObserver = { options: { threshold: [0, 0.7] } };
 const entranceObserver = { options: { rootMargin: '-200px 0px -200px 0px' } };
+// A screen above and below the viewport: elements drawn with html2canvas take their snapshot there, ahead of their
+// entrance (WebGLPlane.prefetchSnapshot())
+const snapshotObserver = { options: { rootMargin: '100% 0px 100% 0px' } };
 
 function observeViewport(shared, element, callback) {
     if (!shared.observer) {
@@ -128,7 +149,6 @@ class AnimatedPlane {
         this.viewportWidth = width;
         this.viewportHeight = height;
         this.originalOptions = JSON.parse(JSON.stringify(options));
-        this.useOffscreenCanvas = true;
         this.dataURL = false;
         this.initialState = true;
 
@@ -188,6 +208,7 @@ class AnimatedPlane {
         const element = this.originalDomElement;
         unobserveViewport(viewportObserver, element);
         unobserveViewport(entranceObserver, element);
+        unobserveViewport(snapshotObserver, element);
         this.unobserve();
         // As the observers reported a removed element before: out of view
         if (this.inViewport) {
@@ -280,6 +301,13 @@ class AnimatedPlane {
                 self.onViewportEnter();
             }
         });
+
+        // A snapshot taken on entering the view is a long task as the entrance starts: taken a screen before instead
+        if (this.htmlToCanvas) {
+            observeViewport(snapshotObserver, domElement, (entry) => {
+                if (entry.isIntersecting) self.prefetchSnapshot();
+            });
+        }
 
         this.childObserver = new MutationObserver(function (mutations) {
             // console.log(mutations)
@@ -407,8 +435,6 @@ class AnimatedPlane {
             this.playHover(this.originalDomElement.aglPlayHover);
             this.originalDomElement.aglPlayHover = null;
         }
-        // A class change can pick effects with other shaders
-        if (this.program) this.updateProgram();
 
         const className = this.originalDomElement.className;
 
@@ -451,6 +477,11 @@ class AnimatedPlane {
             this.isCSSAnimation = false;
             this.showDomElement();
         }
+
+        // A WebGL preset can name an entrance effect (AnimateGL.registerEntranceEffect(), main.js) with its effect
+        this.entranceEffectName = (!this.isCSSAnimation && !this.noEntrance && this.options.in.effect) || '';
+        // A class change can pick effects with other shaders
+        if (this.program) this.updateProgram();
 
         this.chooseCssFade();
         if (this.isCSSAnimation) this.originalDomElement.classList.remove('agl-html2canvas');
@@ -569,6 +600,13 @@ class AnimatedPlane {
         this.hideMesh();
 
         this.viewportEntered = false;
+    }
+
+    // The entrance's shader chunk, looked up when the shaders are built: the webgl chunk registers the core's own
+    // (webgl.js), so they're there once anything is drawn
+    get entranceEffect() {
+        const effects = (window.AnimateGL && window.AnimateGL.entranceEffects) || {};
+        return (this.entranceEffectName && effects[this.entranceEffectName]) || null;
     }
 
     // The effect picked with agl-scroll-<name> or agl-hover-<name>, from AnimateGL.registerEffect() or
@@ -716,11 +754,38 @@ class AnimatedPlane {
                 this.syncCssFade();
             }
         } else {
-            this.hideMesh();
-            if (this.inViewport || !this.options.in.repeat) this.showDomElement();
-            this.effectsReady = !this.options.in.lockToScrollbar;
-            // A hover effect under the mouse, or a playHover() waiting, can start now
+            const shown = this.inViewport || !this.options.in.repeat;
+            if (shown) this.showDomElement();
+            // A frame at the end's progress, while the mesh is still shown, where the element is now: the plane is
+            // placed when the entrance starts and on scrolling, and a layout that settled meanwhile by a fraction of a
+            // pixel (fonts, text split into words) left it a device pixel off the element it hands over to
+            this.updatePositions();
+            this.updateOffset();
             this.layer.wake();
+            // The mesh stays over the element until the browser has painted the element: an image inside it that
+            // wasn't decoded (decoding="async", which WordPress adds, or decoded data dropped while it was hidden)
+            // was painted a frame or more after it was shown, and the element blinked out between its mesh and itself
+            const handOff = (this.handOff = (this.handOff || 0) + 1);
+            const resets = this.resets;
+            const done = () => {
+                // Called off by a new entrance, or a later end that hands off itself
+                if (this.handOff !== handOff || this.entranceAnimamtionPlaying) return;
+                // Hidden also after a reset() or a class change (stopEntrance()) meanwhile, which leave a finished
+                // entrance's mesh alone: it stayed over a new CSS entrance
+                this.hideMesh();
+                if (this.resets !== resets) return;
+                this.effectsReady = !this.options.in.lockToScrollbar;
+                // A hover effect under the mouse, or a playHover() waiting, can start now
+                this.layer.wake();
+            };
+            if (!shown || this.options.in.lockToScrollbar) return done();
+            const element = this.originalDomElement;
+            const images = element.nodeName === 'IMG' ? [element] : Array.from(element.getElementsByTagName('img'));
+            const decoded = Promise.all(images.map((img) => (img.decode ? img.decode().catch(() => {}) : null)));
+            // Not longer than that: an image that never decodes keeps the mesh 300 ms
+            const timeout = new Promise((resolve) => setTimeout(resolve, 300));
+            // Two frames: the first one's paint shows the element, the mesh is hidden in the next
+            Promise.race([decoded, timeout]).then(() => requestAnimationFrame(() => requestAnimationFrame(done)));
         }
     }
 
@@ -1221,7 +1286,8 @@ class AnimatedPlane {
         const params = {
             targets: this.originalDomElement,
             opacity: [0, 1],
-            easing: this.options.in.easing,
+            // A spring easing sets its own duration (easings.js)
+            easing: (0,easings/* resolveEasing */.q)(this.options.in.easing),
             duration: this.options.in.duration,
             delay: this.options.in.delay,
         };
@@ -1493,6 +1559,42 @@ class AnimatedPlane {
     updateMeshOffset() {}
 
     releaseGL() {}
+
+    prefetchSnapshot() {}
+}
+
+
+/***/ }),
+
+/***/ 314:
+/***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
+
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "q": () => (/* binding */ resolveEasing)
+/* harmony export */ });
+// Easing names, as saved in classes (agl-in-easing-<name>) and in the editors' lists, to anime.js easings.
+//
+// anime.js takes its own names as they are (easeOutSine, easeOutElastic, easeOutBounce, easeInBack, ...). Its
+// parametric easings need parentheses, which a class can't carry, so a few named ones stand for them here:
+// agl-in-easing-spring-bouncy is spring(1, 80, 10, 0). A name is saved in posts as a class: never rename one,
+// only map it. Anything else is passed to anime.js as it is, so a page can use any anime.js easing name.
+const namedEasings = {
+    // spring(mass, stiffness, damping, velocity); each sets its own duration, the duration option is ignored (the
+    // block editor's hasOwnDuration() in src/index.js knows them by their spring- prefix)
+    'spring-soft': 'spring(1, 80, 14, 0)', // about 1.3 s, settles with a small overshoot
+    'spring-bouncy': 'spring(1, 80, 10, 0)', // about 1.7 s, a few swings before it settles
+    'spring-stiff': 'spring(0.5, 100, 14, 0)', // about 0.9 s, quick, no overshoot
+};
+
+// steps-<n>: n equal steps, a stop-motion look
+const steps = /^steps-(\d+)$/;
+
+function resolveEasing(name) {
+    if (typeof name !== 'string') return name;
+    if (namedEasings[name]) return namedEasings[name];
+    const match = steps.exec(name);
+    if (match) return `steps(${Math.max(1, Number(match[1]))})`;
+    return name;
 }
 
 
@@ -1559,8 +1661,8 @@ function log(msg){
 /* harmony export */   "Z": () => (__WEBPACK_DEFAULT_EXPORT__)
 /* harmony export */ });
 /*
- * anime.js v3.2.1
- * (c) 2020 Julian Garnier
+ * anime.js v3.2.2
+ * (c) 2023 Julian Garnier
  * Released under the MIT license
  * animejs.com
  */
@@ -1787,6 +1889,7 @@ var penner = (function () {
 
   var functionEasings = {
     Sine: function () { return function (t) { return 1 - Math.cos(t * Math.PI / 2); }; },
+    Expo: function () { return function (t) { return t ? Math.pow(2, 10 * t - 10) : 0; }; },
     Circ: function () { return function (t) { return 1 - Math.sqrt(1 - t * t); }; },
     Back: function () { return function (t) { return t * t * (3 * t - 2); }; },
     Bounce: function () { return function (t) {
@@ -1807,7 +1910,7 @@ var penner = (function () {
     }
   };
 
-  var baseEasings = ['Quad', 'Cubic', 'Quart', 'Quint', 'Expo'];
+  var baseEasings = ['Quad', 'Cubic', 'Quart', 'Quint'];
 
   baseEasings.forEach(function (name, i) {
     functionEasings[name] = function () { return function (t) { return Math.pow(t, i + 2); }; };
@@ -3396,7 +3499,118 @@ function extendOptions(out, ...sources) {
     return out;
 }
 
+;// CONCATENATED MODULE: ./js/motion.js
+// The CSS hover and scroll effects of the core, as classes. Off for visitors who prefer reduced motion.
+//   agl-hover-lift, -grow, -tilt   any element: while the mouse is over it, after its entrance, it rises, grows a
+//                                  little or tilts in 3D toward the mouse. Mice only.
+//   agl-scroll-skew                any element: leans with the scroll speed, after its entrance
+// Elements without an entrance (no agl class, or agl-in-none) move from the start. AnimateGL Pro runs these itself,
+// with its other effects and on touch screens (setUpMotion() in proFeatures.js): it sets AnimateGL.cssEffects to
+// false before the runtime starts. The strengths are those of strengths.json.
+const strengths = { lift: 6, grow: 0.04, tilt: 20, skew: { strength: 0.02, max: 5 } };
+const hoverEffects = ['lift', 'grow', 'tilt'];
+
+function setUpCssEffects() {
+    const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (reducedMotion) return;
+    const canHover = !!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+    const selector = ['.agl-scroll-skew', ...(canHover ? hoverEffects.map((name) => `.agl-hover-${name}`) : [])].join(', ');
+    // Elements that may move now, with their transform: the inline one to restore, the computed one (stylesheet and
+    // entrance end state) to move from. An element leaves while its entrance plays and comes back when it ends.
+    const ready = new Map();
+    // The hover effect of each element: the mouse over it (target), eased (amount), and where (x, y from the top left)
+    const hover = new Map();
+    let frame = 0;
+    const start = () => frame || (frame = window.requestAnimationFrame(step));
+    const add = (element) => {
+        ready.set(element, { inline: element.style.transform, computed: getComputedStyle(element).transform, moved: false });
+        // A hover effect waiting for the entrance to end eases in now
+        if (hover.has(element)) start();
+    };
+    const remove = (element) => {
+        // The hover effect eases in again after the entrance
+        if (hover.has(element)) hover.get(element).amount = 0;
+        if (!ready.has(element)) return;
+        if (ready.get(element).moved) element.style.transform = ready.get(element).inline;
+        ready.delete(element);
+    };
+    const seen = new WeakSet();
+    const register = (element) => {
+        if (seen.has(element)) return;
+        seen.add(element);
+        const own = (event) => event.target === element;
+        element.addEventListener('agl-animation-start', (event) => own(event) && remove(element));
+        element.addEventListener('agl-animation-cancel', (event) => own(event) && remove(element));
+        element.addEventListener('agl-animation-end', (event) => own(event) && add(element));
+        if (!element.classList.contains('agl') || element.classList.contains('agl-in-none')) add(element);
+        const effect = canHover && hoverEffects.find((name) => element.classList.contains(`agl-hover-${name}`));
+        if (!effect) return;
+        const state = { effect, target: 0, amount: 0, x: 0.5, y: 0.5 };
+        hover.set(element, state);
+        const pointer = (event) => {
+            if (event.pointerType !== 'mouse') return;
+            const rect = element.getBoundingClientRect();
+            state.target = event.type === 'pointerleave' ? 0 : 1;
+            if (state.target && rect.width && rect.height) {
+                state.x = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
+                state.y = Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height));
+            }
+            start();
+        };
+        ['pointerenter', 'pointermove', 'pointerleave'].forEach((type) => element.addEventListener(type, pointer, { passive: true }));
+    };
+    const scan = () => document.querySelectorAll(selector).forEach(register);
+    scan();
+    // Elements added after load
+    window.addEventListener('agl-init', scan);
+
+    let current = window.scrollY;
+    function step() {
+        current += (window.scrollY - current) * 0.1;
+        const lag = window.scrollY - current;
+        const angle = Math.abs(lag) < 0.5 ? 0 : Math.max(-strengths.skew.max, Math.min(strengths.skew.max, lag * strengths.skew.strength));
+        let moving = !!angle;
+        // Only an element in view whose entrance has played moves: a hidden one (out of view with repeat) keeps its
+        // own transform, which anime.js reads when it creates the next entrance
+        const settled = (element) => {
+            const plane = element.plane;
+            if (!ready.has(element) || !plane) return ready.has(element);
+            return plane.noEntrance ? plane.inViewport : plane.inViewport && plane.animatedIn && !plane.entranceAnimamtionPlaying;
+        };
+        hover.forEach((state, element) => {
+            if (!settled(element)) {
+                state.amount = 0;
+                return;
+            }
+            const goal = state.target;
+            state.amount += (goal - state.amount) * 0.15;
+            if (Math.abs(goal - state.amount) < 0.005) state.amount = goal;
+            else moving = true;
+        });
+        ready.forEach((entry, element) => {
+            const { inline, computed } = entry;
+            const moves = [];
+            const state = hover.get(element);
+            if (state && state.amount) {
+                const { effect, amount, x, y } = state;
+                const strength = strengths[effect] * amount;
+                if (effect === 'tilt') moves.push(`perspective(800px) rotateX(${((0.5 - y) * strength).toFixed(2)}deg) rotateY(${((x - 0.5) * strength).toFixed(2)}deg)`);
+                if (effect === 'grow') moves.push(`scale(${(1 + strength).toFixed(4)})`);
+                if (effect === 'lift') moves.push(`translateY(${(-strength).toFixed(2)}px)`);
+            }
+            if (angle && settled(element) && element.classList.contains('agl-scroll-skew')) moves.push(`skewY(${angle.toFixed(2)}deg)`);
+            // The element's own transform back once, after it moved; untouched otherwise
+            if (moves.length) element.style.transform = `${computed === 'none' ? '' : computed + ' '}${moves.join(' ')}`;
+            else if (entry.moved) element.style.transform = inline;
+            entry.moved = moves.length > 0;
+        });
+        frame = moving ? window.requestAnimationFrame(step) : 0;
+    }
+    window.addEventListener('scroll', start, { passive: true });
+}
+
 ;// CONCATENATED MODULE: ./js/main.js
+
 
 
 
@@ -3443,6 +3657,13 @@ class Animations {
     init() {
         // animategl.css hides .agl elements only under .agl-js; pages without the WordPress plugin's head script get it here
         document.documentElement.classList.add('agl-js');
+
+        // The CSS hover and scroll effects (motion.js), before the elements are set up so they see their first
+        // entrance. Once, and not when AnimateGL Pro runs them.
+        if (Animations.cssEffects && !cssEffectsStarted) {
+            cssEffectsStarted = true;
+            setUpCssEffects();
+        }
 
         const layers = [];
 
@@ -3603,6 +3824,16 @@ Animations.registerEffect = function (name, effect) {
     Animations.effects[name] = effect;
 };
 
+// Shader chunks for entrances: a WebGL preset with effect: '<name>' draws its entrance with the chunk registered
+// here as effect.shader (the same fields as the scroll and hover effects' shaders, AnimatedPlane.shaderSource()),
+// next to what the preset's other options do. The chunk reads the entrance's progress (declare
+// uniform mediump float progress; in its head, the vertex shader's precision), 0 to 1, past 1 with an easing that overshoots. Without the effect
+// registered, the preset plays as its other options say. The webgl chunk registers the core's (glitch, webgl.js).
+Animations.entranceEffects = {};
+Animations.registerEntranceEffect = function (name, effect) {
+    Animations.entranceEffects[name] = effect;
+};
+
 // The same while the mouse is over the element, picked with agl-hover-<name>. effect.render(plane, { amount, x, y,
 // vx, vy, speed, time }) runs on each frame: amount eases from 0 to 1 while the mouse is over the element and back
 // to 0 after it leaves (a last call with 0 resets what it changed); x and y are the mouse position in the element,
@@ -3613,6 +3844,10 @@ Animations.registerEffect = function (name, effect) {
 // drawn by WebGL while its effect runs. A hover effect with resting: true runs whenever it could, also without the
 // mouse (amount 0), so it can change how the element looks at rest (a reveal hides the image until the mouse comes).
 Animations.hoverEffects = {};
+// The core runs agl-hover-lift, -grow, -tilt and agl-scroll-skew (motion.js) unless an extension that runs them
+// itself sets this to false before the runtime starts (AnimateGL Pro does)
+Animations.cssEffects = true;
+let cssEffectsStarted = false;
 Animations.touchHover = false;
 Animations.registerHoverEffect = function (name, effect) {
     Animations.hoverEffects[name] = effect;
@@ -3653,7 +3888,7 @@ const defaults = {
     rootFolder: '../',
     // The webgl chunk's full URL, when it isn't next to this bundle (js/webglLoader.js). The WordPress plugin sets it.
     webglSrc: '',
-    html2canvasSrc: 'js/lib/html2canvas.min.js',
+    html2canvasSrc: 'js/lib/html2canvas-pro.min.js',
 
     in: {
         name: '',
@@ -3796,6 +4031,9 @@ const defaults = {
                 corners: { end1: 1, end2: 0.6, end3: 0.8, end4: 0.4, easeX: 2, easeY: 2 },
             },
 
+            // Bands jump sideways and colours split as it fades in (shaders/glitch.js)
+            glitch: { fade: { type: 'basic' }, effect: 'glitch' },
+
             slide: { fade: { type: 'right' }, translate: { x: 0.4 } },
             slideLeft: { fade: { type: 'right' }, translate: { x: 0.4 } },
             slideRight: { fade: { type: 'left' }, translate: { x: -0.4 } },
@@ -3885,6 +4123,7 @@ const defaults = {
             { name: 'peel', title: 'Peel' },
             { name: 'zoomIn', title: 'Zoom In' },
             { name: 'zoomOut', title: 'Zoom Out' },
+            { name: 'glitch', title: 'Glitch' },
         ],
     },
 

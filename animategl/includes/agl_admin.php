@@ -39,27 +39,47 @@ if ($animategl_active_builders) {
 }
 $animategl_status = (array) apply_filters('animategl_admin_status', $animategl_status);
 
-// The Animations tab's effect cards: clips recorded from AnimateGL Pro (img/effects/), so lite shows them without
-// Pro's code. [clip, filter, title, classes]
+// The Animations tab's effect cards: [key, filter, title, classes, free, live]. The free ones (the core runs them, js/motion.js
+// in the core) are live: the card's image has their classes. AnimateGL Pro's own show a clip recorded from Pro
+// (img/pro/effects/, Pro only), or are live too (the Pro runtime runs on this page) where live is set; lite shows one
+// card per group that links to the pages of animategl.com where they run.
 $animategl_effects = array(
-	array('hover-zoom', 'hover', __('Zoom in', 'animategl'), 'agl agl-in-none agl-hover-zoom'),
-	array('hover-liquid', 'hover', __('Liquid', 'animategl'), 'agl agl-in-none agl-hover-liquid'),
-	array('hover-ripple', 'hover', __('Ripple', 'animategl'), 'agl agl-in-none agl-hover-ripple'),
-	array('hover-pixels', 'hover', __('Pixel smear', 'animategl'), 'agl agl-in-none agl-hover-pixels'),
-	array('hover-reveal', 'hover', __('Colour under the mouse', 'animategl'), 'agl agl-in-none agl-hover-reveal'),
-	array('hover-spotlight', 'hover', __('Spotlight', 'animategl'), 'agl agl-in-none agl-hover-spotlight'),
-	array('hover-swap', 'hover', __('Image swap', 'animategl'), 'agl agl-in-none agl-hover-swap'),
-	array('hover-tilt', 'hover', __('Tilt', 'animategl'), 'agl agl-in-none agl-hover-tilt'),
-	array('scroll-bend', 'scroll', __('Bend', 'animategl'), 'agl agl-fadeUp agl-scroll-bend'),
-	array('scroll-skew', 'scroll', __('Skew', 'animategl'), 'agl agl-fadeCSSUp agl-scroll-skew'),
-	array('text-split', 'text', __('Split text into words', 'animategl'), 'agl agl-slideCSSUp agl-split-words'),
-	array('text-stagger', 'text', __('Stagger inner elements', 'animategl'), 'agl agl-zoomInCSSUp agl-stagger-120'),
+	array('hover-lift', 'hover', __('Lift', 'animategl'), 'agl-hover-lift', true),
+	array('hover-grow', 'hover', __('Grow', 'animategl'), 'agl-hover-grow', true),
+	array('hover-tilt', 'hover', __('Tilt', 'animategl'), 'agl-hover-tilt', true),
+	array('hover-zoom', 'hover', __('Zoom in', 'animategl'), 'agl agl-in-none agl-hover-zoom', false),
+	array('hover-liquid', 'hover', __('Liquid', 'animategl'), 'agl agl-in-none agl-hover-liquid', false),
+	array('hover-ripple', 'hover', __('Ripple', 'animategl'), 'agl agl-in-none agl-hover-ripple', false),
+	array('hover-pixels', 'hover', __('Pixel smear', 'animategl'), 'agl agl-in-none agl-hover-pixels', false),
+	array('hover-reveal', 'hover', __('Colour under the mouse', 'animategl'), 'agl agl-in-none agl-hover-reveal', false),
+	array('hover-spotlight', 'hover', __('Spotlight', 'animategl'), 'agl agl-in-none agl-hover-spotlight', false),
+	array('hover-swap', 'hover', __('Image swap', 'animategl'), 'agl agl-in-none agl-hover-swap', false),
+	array('scroll-skew', 'scroll', __('Skew', 'animategl'), 'agl-scroll-skew', true),
+	array('scroll-bend', 'scroll', __('Bend', 'animategl'), 'agl agl-fadeUp agl-scroll-bend', false),
+	array('text-split', 'text', __('Split text into words', 'animategl'), 'agl agl-slideCSSUp agl-split-words', false),
+	array('text-stagger', 'text', __('Stagger inner elements', 'animategl'), 'agl agl-zoomInCSSUp agl-stagger-120', false),
+	array('loop-pulse', 'loop', __('Pulse', 'animategl'), 'agl-loop-pulse', false, true),
+	array('loop-float', 'loop', __('Float', 'animategl'), 'agl-loop-float', false, true),
+	array('loop-wobble', 'loop', __('Wobble', 'animategl'), 'agl-loop-wobble', false, true),
+	array('loop-shake', 'loop', __('Shake', 'animategl'), 'agl-loop-shake', false, true),
+	array('loop-heartbeat', 'loop', __('Heartbeat', 'animategl'), 'agl-loop-heartbeat', false, true),
+	array('loop-swing', 'loop', __('Swing', 'animategl'), 'agl-loop-swing', false, true),
+);
+// Lite's card for the Pro effects of each group: [text, where it links, its button]
+$animategl_effect_more = array(
+	'hover' => array(__('Zoom, liquid, ripple, pixel smear, colour reveals, image swap and more, drawn with WebGL.', 'animategl'), AnimateGL_Effects::HOVER_URL, __('See them live', 'animategl')),
+	'scroll' => array(__('Bend, wave and RGB shift, drawn with WebGL while the page scrolls.', 'animategl'), AnimateGL_Effects::SCROLL_URL, __('See them live', 'animategl')),
+	'text' => array(__('Staggered groups and text split into words or letters.', 'animategl'), '#get-pro', __('Get Pro', 'animategl')),
+	'loop' => array(__('Pulse, float, wobble, shake, heartbeat and swing, repeating for as long as the block is on screen.', 'animategl'), '#get-pro', __('Get Pro', 'animategl')),
 );
 $animategl_effect_groups = array(
 	'hover' => __('Hover effects', 'animategl'),
 	'scroll' => __('Scroll effects', 'animategl'),
 	'text' => __('Stagger and text split', 'animategl'),
+	'loop' => __('Loop animations', 'animategl'),
 );
+
+$animategl_effect_index = 0;
 
 $animategl_tab_link = function ($id, $label) {
 	printf('<a href="#%s" class="nav-tab">%s</a>', esc_attr($id), esc_html($label));
@@ -118,7 +138,7 @@ $animategl_tab_link = function ($id, $label) {
 					<?php endforeach; ?>
 				</ul>
 				<?php if ($animategl_upsell) : ?>
-					<p><a href="#get-pro" class="agl-tab-link"><?php esc_html_e('Hover and scroll effects, triggers and more with AnimateGL Pro', 'animategl'); ?></a></p>
+					<p><a href="#get-pro" class="agl-tab-link"><?php esc_html_e('WebGL hover and scroll effects, triggers and more with AnimateGL Pro', 'animategl'); ?></a></p>
 				<?php endif; ?>
 			</div>
 		</div>
@@ -146,7 +166,7 @@ $animategl_tab_link = function ($id, $label) {
 					<p><label for="agl-cb-delay"><?php esc_html_e('Delay (ms)', 'animategl'); ?></label><input type="number" id="agl-cb-delay" min="0" step="100" placeholder="0"></p>
 					<p><label for="agl-cb-easing"><?php esc_html_e('Easing', 'animategl'); ?></label><select id="agl-cb-easing">
 						<option value=""><?php esc_html_e('Default', 'animategl'); ?></option>
-						<?php foreach (array('linear', 'easeOutSine', 'easeOutQuad', 'easeOutCubic', 'easeOutExpo', 'easeInOutSine', 'easeInOutCubic', 'easeOutBack') as $animategl_easing) : ?>
+						<?php foreach (array('linear', 'easeOutSine', 'easeOutQuad', 'easeOutCubic', 'easeOutExpo', 'easeInOutSine', 'easeInOutCubic', 'easeOutBack', 'easeInBack', 'easeInOutBack', 'easeOutElastic', 'easeOutBounce', 'spring-soft', 'spring-bouncy', 'spring-stiff', 'steps-5', 'steps-10') as $animategl_easing) : ?>
 							<option value="<?php echo esc_attr($animategl_easing); ?>"><?php echo esc_html($animategl_easing); ?></option>
 						<?php endforeach; ?>
 					</select></p>
@@ -196,22 +216,33 @@ $animategl_tab_link = function ($id, $label) {
 				</div>
 			</div>
 			<?php foreach ($animategl_effect_groups as $animategl_group => $animategl_group_title) : ?>
-				<h2 class="agl-preset-group" data-type="<?php echo esc_attr($animategl_group); ?>"><?php echo esc_html($animategl_group_title); ?><?php if ($animategl_upsell) : ?> <span class="agl-pro-badge">Pro</span><?php endif; ?></h2>
+				<h2 class="agl-preset-group" data-type="<?php echo esc_attr($animategl_group); ?>"><?php echo esc_html($animategl_group_title); ?></h2>
 				<?php foreach ($animategl_effects as $animategl_effect) : ?>
-					<?php if ($animategl_effect[1] !== $animategl_group) continue; ?>
+					<?php if ($animategl_effect[1] !== $animategl_group || (!$animategl_effect[4] && $animategl_upsell)) continue; ?>
 					<div class="agl-preset agl-effect" data-type="<?php echo esc_attr($animategl_group); ?>" data-search="<?php echo esc_attr(strtolower($animategl_effect[2] . ' ' . $animategl_group_title . ' ' . $animategl_effect[3])); ?>">
-						<video class="agl-preset-preview" src="<?php echo esc_url($animategl_img . 'effects/' . $animategl_effect[0] . '.mp4'); ?>" poster="<?php echo esc_url($animategl_img . 'effects/' . $animategl_effect[0] . '.jpg'); ?>" muted loop playsinline preload="none"></video>
+						<?php if ($animategl_effect[4] || !empty($animategl_effect[5])) : ?>
+							<img class="agl-preset-preview <?php echo esc_attr($animategl_effect[3]); ?>" src="<?php echo esc_url($animategl_img . 'cyber' . (1 + $animategl_effect_index++ % 4) . '.jpg'); ?>" alt="">
+						<?php else : ?>
+							<video class="agl-preset-preview" src="<?php echo esc_url($animategl_img . 'pro/effects/' . $animategl_effect[0] . '.mp4'); ?>" poster="<?php echo esc_url($animategl_img . 'pro/effects/' . $animategl_effect[0] . '.jpg'); ?>" muted loop playsinline preload="none"></video>
+						<?php endif; ?>
 						<div class="agl-preset-info">
 							<span class="agl-preset-title"><?php echo esc_html($animategl_effect[2]); ?></span>
-							<?php if ($animategl_upsell) : ?>
-								<span class="agl-preset-buttons"><a href="#get-pro" class="button button-small agl-tab-link"><?php esc_html_e('Get Pro', 'animategl'); ?></a></span>
-							<?php else : ?>
-								<code class="agl-preset-class agl-copy-text"><?php echo esc_html($animategl_effect[3]); ?></code>
-								<span class="agl-preset-buttons"><button type="button" class="button button-small agl-copy"><?php esc_html_e('Copy', 'animategl'); ?></button></span>
-							<?php endif; ?>
+							<code class="agl-preset-class agl-copy-text"><?php echo esc_html($animategl_effect[3]); ?></code>
+							<span class="agl-preset-buttons"><button type="button" class="button button-small agl-copy"><?php esc_html_e('Copy', 'animategl'); ?></button></span>
 						</div>
 					</div>
 				<?php endforeach; ?>
+				<?php if ($animategl_upsell) : ?>
+					<?php $animategl_more = $animategl_effect_more[$animategl_group]; ?>
+					<?php $animategl_external = '#' !== $animategl_more[1][0]; ?>
+					<div class="agl-preset agl-effect agl-effect-more" data-type="<?php echo esc_attr($animategl_group); ?>" data-search="<?php echo esc_attr(strtolower($animategl_group_title . ' ' . $animategl_more[0] . ' pro')); ?>">
+						<div class="agl-preset-preview"><p><?php echo esc_html($animategl_more[0]); ?></p></div>
+						<div class="agl-preset-info">
+							<span class="agl-preset-title"><?php esc_html_e('More with AnimateGL Pro', 'animategl'); ?> <span class="agl-pro-badge">Pro</span></span>
+							<span class="agl-preset-buttons"><a href="<?php echo esc_url($animategl_more[1]); ?>" class="button button-small<?php echo $animategl_external ? '' : ' agl-tab-link'; ?>"<?php echo $animategl_external ? ' target="_blank" rel="noopener"' : ''; ?>><?php echo esc_html($animategl_more[2]); ?></a></span>
+						</div>
+					</div>
+				<?php endif; ?>
 			<?php endforeach; ?>
 		</div>
 		<p class="agl-gallery-empty" hidden><?php esc_html_e('No animations match.', 'animategl'); ?></p>
@@ -292,19 +323,20 @@ $animategl_tab_link = function ($id, $label) {
 	<div id="get-pro" class="tab-content" style="display:none;">
 		<div class="agl-box agl-get-pro">
 			<h2><?php esc_html_e('AnimateGL Pro', 'animategl'); ?></h2>
-			<p><?php esc_html_e('Everything in AnimateGL, plus effects that react to the mouse and the scrollbar, animations that start on a click or after each other, and rules that animate a whole site at once.', 'animategl'); ?></p>
+			<p><?php esc_html_e('Everything in AnimateGL, plus WebGL effects that react to the mouse and the scrollbar, animations that start on a click or after each other, and rules that animate a whole site at once.', 'animategl'); ?></p>
 			<table class="widefat striped agl-compare">
 				<thead><tr><th></th><th><?php esc_html_e('AnimateGL', 'animategl'); ?></th><th><?php esc_html_e('Pro', 'animategl'); ?></th></tr></thead>
 				<tbody>
 					<?php
 					$animategl_features = array(
 						array(__('CSS and WebGL entrance animations', 'animategl'), true),
+						array(__('Hover effects lift, grow and tilt, and the skew scroll effect', 'animategl'), true),
 						array(__('Block editor, Elementor and CSS classes', 'animategl'), true),
 						array(__('Animation editor for the default animation', 'animategl'), true),
 						array(__('Entrance Pack and Fade Pack presets', 'animategl'), false),
 						array(__('Saved animations library, with import and export', 'animategl'), false),
 						array(__('WebGL hover effects: liquid, ripple, reveal, image swap and more', 'animategl'), false),
-						array(__('Scroll effects: bend, skew and more', 'animategl'), false),
+						array(__('WebGL scroll effects: bend, wave and RGB shift', 'animategl'), false),
 						array(__('Start on a click, on a class, or after another block', 'animategl'), false),
 						array(__('Stagger groups and split text into words', 'animategl'), false),
 						array(__('Turn off per device, play once per visit', 'animategl'), false),

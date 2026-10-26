@@ -4,17 +4,17 @@ AnimateGL includes the following third-party software. Each one keeps its own li
 
 | Software | Used in | Licence | Copyright |
 |---|---|---|---|
-| [anime.js](https://animejs.com) 3.2.1 | `js/lib/animategl.js` | MIT | (c) 2019 Julian Garnier |
+| [anime.js](https://animejs.com) 3.2.2 | `js/lib/animategl.js` | MIT | (c) 2023 Julian Garnier |
 | [OGL](https://github.com/oframe/ogl) 0.0.90 | `js/lib/animategl.webgl.js` (loaded only for WebGL animations) | Unlicense (public domain) | Nathan Gordon |
 | [lil-gui](https://lil-gui.georgealways.com) 0.16.1, patched | `js/lib/animategl.editor.js` (Animation Editor) | MIT | (c) 2019 George Michael Brower |
-| [html2canvas](https://html2canvas.hertzen.com) 1.4.1, patched | `js/lib/html2canvas.js` | MIT | (c) 2022 Niklas von Hertzen |
+| [html2canvas-pro](https://github.com/yorickshan/html2canvas-pro) 2.5.2, patched, a fork of [html2canvas](https://html2canvas.hertzen.com) | `js/lib/html2canvas-pro.js` | MIT | (c) 2024-present yorickshan and html2canvas-pro contributors; (c) 2022 Niklas von Hertzen |
 | [classnames](https://github.com/JedWatson/classnames) 2.5.1 | `build/index.js` (block editor) | MIT | (c) 2018 Jed Watson |
 | [webgl-noise](https://github.com/ashima/webgl-noise) (2D simplex noise) | WebGL hover effects | MIT | (c) 2011 Ashima Arts, Stefan Gustavson |
 | [Freemius WordPress SDK](https://github.com/Freemius/wordpress-sdk) | `vendor/freemius` | GPL-3.0 (see `vendor/freemius/LICENSE.txt`) | Freemius, Inc. |
 
 Each minified file also has a readable copy next to it (`.js` beside `.min.js`).
 
-The clips and posters in `img/effects/` (the Animations tab's effect cards) show photos from [Unsplash](https://unsplash.com), used under the Unsplash License.
+The clips and posters in `img/pro/effects/` (AnimateGL Pro's effect cards on the Animations tab) show photos from [Unsplash](https://unsplash.com), used under the Unsplash License.
 
 The sample photos in `img/` (the admin page's previews and the Live Preview demo) are from Unsplash, used under the [Unsplash License](https://unsplash.com/license) (free for commercial use, no attribution required). Credited here anyway:
 
@@ -27,7 +27,7 @@ The sample photos in `img/` (the admin page's previews and the Live Preview demo
 
 ## MIT License
 
-The MIT License applies to anime.js, lil-gui, html2canvas, classnames and webgl-noise, with the copyright lines above.
+The MIT License applies to anime.js, lil-gui, html2canvas-pro, classnames and webgl-noise, with the copyright lines above.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
 

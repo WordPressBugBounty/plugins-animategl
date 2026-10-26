@@ -24,6 +24,7 @@ import classnames from 'classnames';
 import { animationClasses } from './classes';
 import { Section } from './section';
 import { previewAnimation, stopPreview } from './preview';
+import './effects';
 
 /**
  * Plays the block's animation shortly after an animation or direction is picked, so picks in quick
@@ -124,7 +125,19 @@ const easingOptions = () => [
 	easing( __( 'Sharp in and out', 'animategl' ), 'easeInOutExpo' ),
 	easing( __( 'Sharp in', 'animategl' ), 'easeInExpo' ),
 	easing( __( 'Overshoot', 'animategl' ), 'easeOutBack' ),
+	easing( __( 'Overshoot in', 'animategl' ), 'easeInBack' ),
+	easing( __( 'Overshoot in and out', 'animategl' ), 'easeInOutBack' ),
+	easing( __( 'Elastic', 'animategl' ), 'easeOutElastic' ),
+	easing( __( 'Bounce', 'animategl' ), 'easeOutBounce' ),
+	easing( __( 'Spring, soft', 'animategl' ), 'spring-soft' ),
+	easing( __( 'Spring, bouncy', 'animategl' ), 'spring-bouncy' ),
+	easing( __( 'Spring, stiff', 'animategl' ), 'spring-stiff' ),
+	easing( __( 'Steps, 5', 'animategl' ), 'steps-5' ),
+	easing( __( 'Steps, 10', 'animategl' ), 'steps-10' ),
 ];
+
+// The springs set their own duration (the spring-* names in Animate GL/js/easings.js), so the duration control is off with one
+const hasOwnDuration = ( easing ) => /^spring/.test( easing || '' );
 
 /**
  * Lite's one pointer to AnimateGL Pro in the editor: a folded row at the end of the panel. Hiding it is saved
@@ -138,7 +151,7 @@ function ProRow() {
 		<Section title={ __( 'More with Pro', 'animategl' ) }>
 			<p style={ { margin: '0 0 8px' } }>
 				{ __(
-					'Hover and scroll effects, starting on a click or after another block, staggered groups, split text, and site-wide rules.',
+					'WebGL hover and scroll effects, starting on a click or after another block, staggered groups, split text, and site-wide rules.',
 					'animategl'
 				) }
 			</p>
@@ -278,6 +291,8 @@ function AnimationControls( props ) {
 						min={ 0 }
 						step={ 50 }
 						max={ 3000 }
+						disabled={ hasOwnDuration( aglInEasing ) }
+						help={ hasOwnDuration( aglInEasing ) ? __( 'A spring easing sets its own duration.', 'animategl' ) : undefined }
 					/>
 
 					<RangeControl

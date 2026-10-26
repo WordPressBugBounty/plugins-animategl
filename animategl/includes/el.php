@@ -48,33 +48,11 @@ class AnimateGL_El
 		add_action('elementor/element/container/section_effects/after_section_end',  [$this, 'add_section']);
 
 		add_action('elementor/element/after_add_attributes', function ($element) {
-
-			$agl_in_name = $element->get_settings('agl_in_name');
-			$classes = '';
-
-			// Settings end up in the class attribute, so accept only class-safe names and numbers
-			if ($agl_in_name && AnimateGL::is_class_token($agl_in_name)) {
-				$direction = $element->get_settings('agl_in_direction');
-				$classes = $agl_in_name == 'custom' ? 'agl' : 'agl agl-' . $agl_in_name . (AnimateGL::is_class_token($direction) ? $direction : '');
-				$duration = $this->get_slider_size($element, 'agl_in_duration', 1000);
-				$delay = $this->get_slider_size($element, 'agl_in_delay', 0);
-				$distance = $this->get_slider_size($element, 'agl_in_distance', 1);
-				$classes .= ' agl-in-duration-' . $duration;
-				$classes .= ' agl-in-delay-' . $delay;
-				$classes .= ' agl-in-distance-' . $distance;
-				$easing = $element->get_settings('agl_in_easing');
-				if ($easing && AnimateGL::is_class_token($easing))
-					$classes .= ' agl-in-easing-' . $easing;
-				$repeat = $element->get_settings('agl_in_repeat');
-				if ($repeat == 'yes')
-					$classes .= ' agl-in-repeat';
-				$loctToScrollbar = $element->get_settings('agl_in_lockToScrollbar');
-					if ($loctToScrollbar == 'yes')
-						$classes .= ' agl-in-lockToScrollbar';
+			// Atomic elements fire this too, with typed settings: el-atomic.php handles them
+			if (method_exists($element, 'get_atomic_settings')) {
+				return;
 			}
-
-			// The Elementor side of animategl_block_classes, for the controls added on animategl_elementor_controls
-			$classes = trim((string) apply_filters('animategl_elementor_classes', $classes, $element));
+			$classes = $this->element_classes($element);
 			if ($classes) {
 				$element->add_render_attribute(
 					'_wrapper',
@@ -82,6 +60,12 @@ class AnimateGL_El
 				);
 			}
 		});
+
+		// Elementor 4's atomic elements have no Motion Effects section: the same controls and classes through their own hooks
+		if (class_exists('Elementor\Modules\AtomicWidgets\Controls\Section')) {
+			include_once($this->plugin_dir_path . 'includes/el-atomic.php');
+			new AnimateGL_El_Atomic($this);
+		}
 
 		// Front end only (this also covers the Elementor preview), not every admin and REST request
 		add_action('wp_enqueue_scripts', function () {
@@ -103,6 +87,37 @@ class AnimateGL_El
 	{
 		$value = $element->get_settings($key);
 		return is_array($value) && isset($value['size']) && is_numeric($value['size']) ? $value['size'] + 0 : $default;
+	}
+
+	// The classes for an element's AnimateGL settings. $element can also be an atomic element's stand-in (el-atomic.php).
+	public function element_classes($element)
+	{
+		$agl_in_name = $element->get_settings('agl_in_name');
+		$classes = '';
+
+		// Settings end up in the class attribute, so accept only class-safe names and numbers
+		if ($agl_in_name && AnimateGL::is_class_token($agl_in_name)) {
+			$direction = $element->get_settings('agl_in_direction');
+			$classes = $agl_in_name == 'custom' ? 'agl' : 'agl agl-' . $agl_in_name . (AnimateGL::is_class_token($direction) ? $direction : '');
+			$duration = $this->get_slider_size($element, 'agl_in_duration', 1000);
+			$delay = $this->get_slider_size($element, 'agl_in_delay', 0);
+			$distance = $this->get_slider_size($element, 'agl_in_distance', 1);
+			$classes .= ' agl-in-duration-' . $duration;
+			$classes .= ' agl-in-delay-' . $delay;
+			$classes .= ' agl-in-distance-' . $distance;
+			$easing = $element->get_settings('agl_in_easing');
+			if ($easing && AnimateGL::is_class_token($easing))
+				$classes .= ' agl-in-easing-' . $easing;
+			$repeat = $element->get_settings('agl_in_repeat');
+			if ($repeat == 'yes')
+				$classes .= ' agl-in-repeat';
+			$loctToScrollbar = $element->get_settings('agl_in_lockToScrollbar');
+				if ($loctToScrollbar == 'yes')
+					$classes .= ' agl-in-lockToScrollbar';
+		}
+
+		// The Elementor side of animategl_block_classes, for the controls added on animategl_elementor_controls
+		return trim((string) apply_filters('animategl_elementor_classes', $classes, $element));
 	}
 
 	public function add_section($element)
@@ -301,8 +316,15 @@ class AnimateGL_El
 					'easeOutBack' => __('easeOutBack', 'animategl'),
 					'easeInOutBack' => __('easeInOutBack', 'animategl'),
 					'easeInBack' => __('easeInBack', 'animategl'),
-
+					'easeOutElastic' => __('easeOutElastic', 'animategl'),
+					'easeOutBounce' => __('easeOutBounce', 'animategl'),
+					'spring-soft' => __('Spring, soft', 'animategl'),
+					'spring-bouncy' => __('Spring, bouncy', 'animategl'),
+					'spring-stiff' => __('Spring, stiff', 'animategl'),
+					'steps-5' => __('Steps, 5', 'animategl'),
+					'steps-10' => __('Steps, 10', 'animategl'),
 				],
+				'description' => __('A spring easing sets its own duration.', 'animategl'),
 				'default' => '',
 				'render_type'        => 'none',
 				'frontend_available' => true,

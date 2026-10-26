@@ -51,6 +51,10 @@ class AnimateGL
 		add_filter('register_block_type_args', array($this, 'register_block_attributes'), 10, 2);
 		add_filter('render_block', array($this, 'render_block'), 10, 2);
 
+		// The free hover and scroll effects
+		include_once($this->plugin_dir_path . 'includes/effects.php');
+		new AnimateGL_Effects();
+
 
 
 		add_action('wp_enqueue_scripts', array($this, 'frontend_assets'));

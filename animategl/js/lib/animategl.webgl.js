@@ -6,7 +6,7 @@
 "use strict";
 (self["animateglChunks"] = self["animateglChunks"] || []).push([[88],{
 
-/***/ 329:
+/***/ 243:
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 // ESM COMPAT FLAG
@@ -5745,7 +5745,10 @@ class Animation {
 var anime_es = __webpack_require__(30);
 // EXTERNAL MODULE: ./js/utils/functions.js
 var functions = __webpack_require__(442);
+// EXTERNAL MODULE: ./js/easings.js
+var easings = __webpack_require__(314);
 ;// CONCATENATED MODULE: ./js/animations/InAnimation.js
+
 
 
 
@@ -5783,8 +5786,8 @@ class InAnimation extends Animation {
             offset: 0,
 			progress: 1,
             // easing: this.options.easing,
-            duration: this.duration,
-			easing: this.options.in.easing,
+            duration: this.duration, // ignored by a spring easing, which sets its own (easings.js)
+			easing: (0,easings/* resolveEasing */.q)(this.options.in.easing),
 			// duration: agl.options.in.duration,
             delay: this.delay,
 			begin: function(){
@@ -6021,7 +6024,11 @@ void main() {
 
 	start += translate;
 
-	if(progress > 0. && progress < 1.){
+	// progress is 1 once the entrance has ended. Easings that overshoot take it past 1, and ones that anticipate
+	// below 0: without corner timings the element moves past its place (or starts further out) and back, which is
+	// the point of a spring or an elastic easing, except along z, where going past the camera would turn it inside
+	// out. With corner timings each corner's smoothstep stays within its start and end.
+	if(progress != 1.){
 		if (p1.x != 0. || p2.x != 0. || p3.x != 0. || p4.x != 0. || 
 			p1.y != 1. || p2.y != 1. || p3.y != 1. || p4.y != 1. ){
 			float xEase = ease(easeX, uv.x);
@@ -6035,7 +6042,9 @@ void main() {
 
 			pos = mix(start, pos, currentPos);
 		} else {
+			float z = mix(start.z, pos.z, clamp(progress, 0., 1.));
 			pos = mix(start, pos, progress);
+			pos.z = z;
 		}
 	} 
 
@@ -6096,6 +6105,10 @@ const fragment = /* glsl */ `
     vec2 crop(vec2 p) {
         return cropTo(p, tScale);
     }
+    // Textures are uploaded premultiplied (premultiplyAlpha): a sample back to straight alpha, as the effects work in
+    vec4 straight(vec4 c) {
+        return c.a > 0. ? vec4(c.rgb / c.a, c.a) : c;
+    }
     //@agl fragment-head
     void main() {
         // Effects (AnimateGL.registerEffect and registerHoverEffect, with a shader) are spliced in at the //@agl lines
@@ -6107,7 +6120,10 @@ const fragment = /* glsl */ `
         vec2 flow = vec2(0.);
         //@agl fragment-uv
         vec2 uv = crop(p);
-        vec4 color = texture2D(tMap, uv - flow);
+        // Straight alpha for the effects, multiplied once below. Multiplied a second time, text without a background
+        // of its own drew bolder (dark) or thinner (light) than the page. Effects that sample a texture themselves
+        // pass it through straight() too.
+        vec4 color = straight(texture2D(tMap, uv - flow));
         //@agl fragment-color
         color.a *= roundedCorners();
         gl_FragColor = vec4(color.rgb * color.a, color.a);
@@ -6306,15 +6322,17 @@ void main() {
 
 		if(threshold >= 3.){
 
-            color.a *= progress;
+            color *= progress;
 
         }else{
             // color.rgb /= .2 + .8 * smoothstep(dist, dist + s, progress * distMax * (1. + s));
             // color.a *= smoothstep(d, d + threshold, progressStripes * distMax * (1. + threshold));        
             // color.a *= smoothstep(d, d + threshold, progress * (1. + threshold));    
 
-			// The fade scales the alpha: inside smoothstep, anti-aliased edges (text) were raised until the end, so text looked bolder while it faded in
-			color.a *= smoothstep(0., 1., (progress * (1. + threshold) - d) / threshold);
+			// The fade scales the alpha: inside smoothstep, anti-aliased edges (text) were raised until the end, so text looked bolder while it faded in.
+			// The colour is premultiplied (the frame drawn by fragment.js), so all of it is scaled: scaling only the
+			// alpha left light areas at full brightness over what's behind until the end.
+			color *= smoothstep(0., 1., (progress * (1. + threshold) - d) / threshold);
 		}
     }
 
@@ -6381,13 +6399,41 @@ const programOptions = {
 };
 
 
-// The rect with its edges rounded to whole CSS pixels, where the browser draws an image (measured in Chrome, at 1x
-// and 2x): the plane covers the same pixels as the element, and imageTexture() draws the image into them as the
-// browser does
-function snapRect(rect) {
-    const x = Math.round(rect.left);
-    const y = Math.round(rect.top);
-    return new DOMRect(x, y, Math.round(rect.right) - x, Math.round(rect.bottom) - y);
+// Browsers paint a box's edges and its content (boxes, text, images) on whole device pixels: a box at y 100.29 at 2x
+// is painted at device pixel 201. Measured in Chromium on a Mac's 2x screen, 26 Oct 2026. Chrome under Playwright's
+// deviceScaleFactor (the 25 Oct measurement, which made this whole CSS pixels in Chromium) scales a 1x layout, so
+// there it paints on whole CSS pixels: that's emulation, not a real 2x screen.
+
+// A CSS length rounded to whole device pixels, half up as the browser rounds. devicePixelRatio is a float (1.8 at 90%
+// zoom on a 2x screen is 1.7999999523), so an edge exactly half a device pixel in (188.0556 x 1.8 = 338.5) came out a
+// hair under and rounded down, a device pixel off the element: the tiny bias puts it back.
+function roundDevice(v, dpr) {
+    return Math.round(v * dpr + 1e-3) / dpr;
+}
+
+// The rect with its edges rounded where the browser paints the element: the plane covers the same pixels as the
+// element, imageTexture() draws an image into them as the browser does, and renderHTMLToCanvas() draws the element
+// from that corner, so nothing moves when the element comes back after its entrance
+function snapRect(rect, dpr) {
+    const d = dpr || 1;
+    const round = (v) => roundDevice(v, d);
+    const x = round(rect.left);
+    const y = round(rect.top);
+    return new DOMRect(x, y, round(rect.right) - x, round(rect.bottom) - y);
+}
+
+// Only macOS draws text with -webkit-font-smoothing (-moz-osx-font-smoothing in Firefox)
+const MAC = typeof navigator !== 'undefined' && /Macintosh/.test(navigator.userAgent);
+
+// Whether an element or any element in it has thin font smoothing (antialiased or grayscale) on a Mac
+function thinSmoothing(element) {
+    if (!MAC || !element) return false;
+    const thin = (el) => {
+        const style = getComputedStyle(el);
+        const value = style.getPropertyValue('-webkit-font-smoothing') || style.getPropertyValue('-moz-osx-font-smoothing');
+        return value === 'antialiased' || value === 'grayscale';
+    };
+    return thin(element) || Array.prototype.some.call(element.querySelectorAll('*'), thin);
 }
 
 // A computed style's four border radii: top left, top right, bottom right, bottom left
@@ -6542,14 +6588,14 @@ class WebGLPlane {
     }
 
     // An image as the texture, drawn into a canvas of the element's size in device pixels the way the browser draws
-    // the image itself: cropped as object-fit: cover crops it, with its edges on whole pixels. The plane then shows
+    // the image itself: cropped as object-fit: cover crops it, with its edges on whole device pixels. The plane then shows
     // it pixel for pixel, the same as the image when the animation ends. Drawn whole and scaled by the GPU (with
     // mipmaps), it looked softer. Anything else (the HTML drawn by html2canvas) is returned as it is.
     imageTexture(img) {
         if (!this.isImage || !img || !img.naturalWidth || !img.naturalHeight) return img;
         const dpr = this.layer.dpr;
         const rect = this.domElement.getBoundingClientRect();
-        const box = snapRect(rect);
+        const box = snapRect(rect, dpr);
         // The image's content box, from the element's unrounded box as the browser computes it
         let width = rect.width;
         let height = rect.height;
@@ -6560,14 +6606,16 @@ class WebGLPlane {
         }
         const left = rect.left + (rect.width - width) / 2;
         const top = rect.top + (rect.height - height) / 2;
-        const x = Math.round(left);
-        const y = Math.round(top);
+        // Its edges on whole device pixels, as the browser paints it (snapRect())
+        const round = (v) => roundDevice(v, dpr);
+        const x = round(left);
+        const y = round(top);
         const canvas = document.createElement('canvas');
         canvas.width = Math.max(1, Math.round(box.width * dpr));
         canvas.height = Math.max(1, Math.round(box.height * dpr));
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(img, (x - box.x) * dpr, (y - box.y) * dpr, (Math.round(left + width) - x) * dpr, (Math.round(top + height) - y) * dpr);
+        ctx.drawImage(img, (x - box.x) * dpr, (y - box.y) * dpr, (round(left + width) - x) * dpr, (round(top + height) - y) * dpr);
         this.textureSource = img;
         return canvas;
     }
@@ -6679,13 +6727,13 @@ class WebGLPlane {
     // The plane's shaders: the core's, with the shader chunks of this element's effects spliced in at the //@agl
     // lines. An effect's shader is { uniforms, vertexHead, vertex, fragmentHead, fragmentUv, fragmentColor }:
     // uniforms maps names to their starting values (a number, [x, y] for a vec2, null for a texture, which starts as
-    // the element's own); vertexHead and fragmentHead hold declarations and functions (a string or an array of them,
+    // the element's own, or a function of the plane that returns one); vertexHead and fragmentHead hold declarations and functions (a string or an array of them,
     // each added once, so effects can share one); vertex deforms pos; fragmentUv moves p (element space, 0 to 1 from
     // the bottom left) or flow (subtracted from the texture coordinate); fragmentColor changes color, read at uv.
     shaderSource() {
         const parts = { 'vertex-head': [], vertex: [], 'fragment-head': [], 'fragment-uv': [], 'fragment-color': [] };
         const keys = { vertexHead: 'vertex-head', vertex: 'vertex', fragmentHead: 'fragment-head', fragmentUv: 'fragment-uv', fragmentColor: 'fragment-color' };
-        for (const effect of [this.scrollEffect, this.hoverEffect]) {
+        for (const effect of [this.entranceEffect, this.scrollEffect, this.hoverEffect]) {
             const shader = effect && effect.shader;
             if (!shader) continue;
             for (const key in keys) {
@@ -6699,14 +6747,20 @@ class WebGLPlane {
         return { vertex: splice(vertex), fragment: splice(fragment) };
     }
 
-    // The uniforms of this element's effects that the program doesn't have yet
+    // The uniforms of this element's effects that the program doesn't have yet. A value given as a function of the
+    // plane (an entrance's from its options) is set again each time, as a class change can change the options.
     addEffectUniforms() {
         const uniforms = this.program.uniforms;
-        for (const effect of [this.scrollEffect, this.hoverEffect]) {
+        for (const effect of [this.entranceEffect, this.scrollEffect, this.hoverEffect]) {
             const values = (effect && effect.shader && effect.shader.uniforms) || {};
             for (const name in values) {
-                if (uniforms[name]) continue;
                 const value = values[name];
+                if (typeof value === 'function') {
+                    if (uniforms[name]) uniforms[name].value = value(this);
+                    else uniforms[name] = { value: value(this) };
+                    continue;
+                }
+                if (uniforms[name]) continue;
                 uniforms[name] = { value: value === null ? this.texture : Array.isArray(value) ? new Vec2(value[0], value[1]) : value };
             }
         }
@@ -6719,7 +6773,7 @@ class WebGLPlane {
         // Lost: compiled from the new classes once it's restored
         if (this.layer.contextLost) return;
         const source = this.shaderSource();
-        if (source.vertex === this.programSource.vertex && source.fragment === this.programSource.fragment) return;
+        if (source.vertex === this.programSource.vertex && source.fragment === this.programSource.fragment) return this.addEffectUniforms();
         this.layer.programs.switch(this.program, { ...source, ...programOptions });
         this.programSource = source;
         this.addEffectUniforms();
@@ -6893,7 +6947,14 @@ class WebGLPlane {
 
         if (this.htmlToCanvas) {
             try {
-                await this.loadScript(this.options.rootFolder + this.options.html2canvasSrc);
+                await this.loadScript(this.layer.html2canvasUrl);
+                // Taken ahead (prefetchSnapshot()) at another size, after a resize while out of view: taken again
+                if (this.snapshotSize && this.snapshotSize !== this.snapshotKey()) {
+                    await Promise.resolve(this.renderHTMLToCanvasPromise).catch(() => {});
+                    this.textureImg = new Image();
+                    this.renderHTMLToCanvasPromise = null;
+                }
+                this.snapshotSize = null;
                 if (!this.textureImg.src) {
                     this.renderHTMLToCanvasPromise = this.renderHTMLToCanvasPromise || this.renderHTMLToCanvas();
                     await this.renderHTMLToCanvasPromise;
@@ -6946,7 +7007,7 @@ class WebGLPlane {
         return Promise.all(textureLoadingPromisses);
     }
 
-    getCanvas(width, height) {
+    getCanvas(width, height, domElement) {
         // if(this.canvasForRenderingHTML){
 
         // 	ctx = null;
@@ -6967,8 +7028,11 @@ class WebGLPlane {
 
         // console.log("getCanvas() ", width, height)
 
+        // A canvas element for text with thin smoothing on a Mac: html2canvas draws it with the element's
+        // -webkit-font-smoothing only on a canvas of the document (setCanvasFont(), drawThinText() in
+        // tools/html2canvas-pro.mjs), and on an OffscreenCanvas it came out bolder than the page's
         let canvas;
-        if (this.useOffscreenCanvas && typeof OffscreenCanvas != 'undefined') {
+        if (typeof OffscreenCanvas != 'undefined' && !thinSmoothing(domElement)) {
             canvas = new OffscreenCanvas(width, height);
         } else {
             canvas = document.createElement('canvas');
@@ -6978,21 +7042,56 @@ class WebGLPlane {
         return canvas;
     }
 
+    // The element's size (CSS pixels, rounded) and the canvas's devicePixelRatio: a snapshot taken ahead is used if
+    // they match
+    snapshotKey() {
+        // Unsnapped: the snapped size flips by a pixel with the element's position (updatePositions())
+        const box = this.originalDomElement.getBoundingClientRect();
+        return Math.round(box.width) + 'x' + Math.round(box.height) + '@' + this.layer.dpr;
+    }
+
+    // An element drawn with html2canvas, a screen before it comes into view (AnimatedPlane's snapshot observer):
+    // its snapshot is taken in idle time, so its entrance finds it ready. Taken on entering the view, it was a long
+    // task (about 60 ms on an M5) just as the entrance started, while the page scrolled.
+    prefetchSnapshot() {
+        // Not before this layer's own loadWebGL() (a second AnimateGL instance gets these methods from the first's):
+        // it sets html2canvas's URL, and the entrance takes the snapshot then
+        if (!this.layer.html2canvasUrl) return;
+        if (this.prefetching || this.isCSSAnimation || this.noEntrance || this.animatedIn || this.textureImg.src || this.renderHTMLToCanvasPromise) return;
+        // Waits for play(): it may never come
+        if (this.manual && !this.playRequested()) return;
+        this.prefetching = true;
+        const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 100));
+        const take = () => {
+            this.prefetching = false;
+            // Taken meanwhile by the entrance, or no longer drawn with html2canvas
+            if (this.detached || this.layer.contextLost || this.isCSSAnimation || this.noEntrance || this.textureImg.src || this.renderHTMLToCanvasPromise) return;
+            this.snapshotSize = this.snapshotKey();
+            this.renderHTMLToCanvasPromise = this.renderHTMLToCanvas();
+            // The entrance awaits the same promise and handles a failure (shown without WebGL)
+            this.renderHTMLToCanvasPromise.catch(() => {});
+        };
+        this.loadScript(this.layer.html2canvasUrl).then(
+            () => idle(take, { timeout: 1000 }),
+            () => (this.prefetching = false)
+        );
+    }
+
     async renderHTMLToCanvas() {
         const domElement = this.originalDomElement;
 
         if (typeof html2canvas != 'undefined') {
             // The canvas's devicePixelRatio, capped (webgl.js)
             const scale = this.layer.dpr || window.devicePixelRatio;
-            // The pixels the plane covers (updatePositions()), with the element at its own, unrounded place in
-            // them as on the page: drawn from the element's unrounded corner, the texture was up to half a pixel
-            // off the page's text and blurred by the GPU's filtering
+            // The pixels the plane covers (updatePositions()), with the element drawn from their corner, where the
+            // browser paints it (snapRect()). Drawn at its unrounded place inside them, the whole element (edges and
+            // text) was up to a device pixel off the page's in Chrome, and jumped when the entrance ended.
             const rect = domElement.getBoundingClientRect();
-            const box = snapRect(rect);
+            const box = snapRect(rect, scale);
             const w = box.width * scale;
             const h = box.height * scale;
 
-            const canvas = this.getCanvas(w, h);
+            const canvas = this.getCanvas(w, h, domElement);
             const ctx = canvas.getContext('2d');
             ctx.imageSmoothingEnabled = false;
             ctx.textRendering = 'optimizeSpeed';
@@ -7011,9 +7110,9 @@ class WebGLPlane {
                 backgroundColor: null,
                 logging: false,
                 scale: scale,
-                // From the element's corner
-                x: box.left - rect.left,
-                y: box.top - rect.top,
+                // From the snapped corner
+                x: 0,
+                y: 0,
                 width: box.width,
                 height: box.height,
                 windowWidth: window.innerWidth - (window.innerWidth - document.documentElement.clientWidth),
@@ -7102,7 +7201,7 @@ class WebGLPlane {
                 let blob;
                 // PNG: lossless. WebP at its default quality smudged the edges of text
 
-                if (this.useOffscreenCanvas && typeof OffscreenCanvas != 'undefined') {
+                if (typeof renderedCanvas.convertToBlob === 'function') {
                     blob = await renderedCanvas.convertToBlob({ type: 'image/png' });
                 } else {
                     blob = await new Promise((resolve) => {
@@ -7241,7 +7340,8 @@ class WebGLPlane {
 
         if (!this.mesh || !this.mesh.visible) return;
 
-        const rect = snapRect(this.domElement.getBoundingClientRect());
+        const box = this.domElement.getBoundingClientRect();
+        const rect = snapRect(box, this.layer.dpr);
 
         this.rect = {
             x: rect.x,
@@ -7258,8 +7358,11 @@ class WebGLPlane {
         // if (this.postWidth != rect.width || this.postHeight != rect.height || this.canvasWidth != this.gl.canvas.width || this.canvasHeight != this.gl.canvas.height) {
         // While the window is being resized (main.js) the plane is only moved and scaled, its texture and targets
         // stretched: they're redrawn at the new size once the resize stops
+        // Resized: the element's own size changed. The snapped one flips by a pixel as the page scrolls past
+        // fractional positions, and each flip took a new html2canvas snapshot, on every scroll frame of an entrance.
         const resizing = this.layer.resizing && this.postWidth;
-        if (!resizing && (this.postWidth != rect.width || this.postHeight != rect.height)) {
+        const resized = !this.postWidth || Math.abs(box.width - this.postBoxWidth) > 0.5 || Math.abs(box.height - this.postBoxHeight) > 0.5;
+        if (!resizing && resized) {
             this.post.resize({ width: rect.width, height: rect.height, dpr: dpr });
             // Held targets are resized in place, which clears them: drawn again, or a mesh at rest (a resting hover
             // effect, an effect after the entrance) showed an empty target until something else redrew it
@@ -7288,6 +7391,8 @@ class WebGLPlane {
             }
             this.postWidth = rect.width;
             this.postHeight = rect.height;
+            this.postBoxWidth = box.width;
+            this.postBoxHeight = box.height;
         }
 
         const canvasWidth = this.gl.canvas.width;
@@ -7389,7 +7494,12 @@ class WebGLPlane {
 
     updateUniformValues() {
         const self = this;
+        // An easing that overshoots (easeOutBack, easeOutElastic, the springs) takes the progress past 1, and one
+        // that anticipates (easeInBack) below 0. The mesh follows it (vertex.js moves the element past its place
+        // and back); the fade and the effect passes settle at 1 and stay there, as a fade or a blur past its end
+        // has no meaning.
         const progress = this.getInParam('progress');
+        const settled = Math.min(Math.max(progress, 0), 1);
 
         const progressOld = this.program.uniforms.progress.value;
         this.program.uniforms.progress.value = progress;
@@ -7399,9 +7509,9 @@ class WebGLPlane {
             if (pass.enabled) {
                 if (pass.uniforms.hasOwnProperty('u_time')) pass.uniforms.u_time.value += 0.02;
                 if (pass.uniforms.hasOwnProperty('u_radius'))
-                    pass.uniforms.u_radius.value = progress * (Math.pow(2, 0.5) / 2) * 1.2;
-                if (pass.uniforms.hasOwnProperty('strength')) pass.uniforms.strength.value = 1 - progress;
-                if (pass.uniforms.hasOwnProperty('progress')) pass.uniforms.progress.value = progress;
+                    pass.uniforms.u_radius.value = settled * (Math.pow(2, 0.5) / 2) * 1.2;
+                if (pass.uniforms.hasOwnProperty('strength')) pass.uniforms.strength.value = 1 - settled;
+                if (pass.uniforms.hasOwnProperty('progress')) pass.uniforms.progress.value = settled;
                 if (pass.uniforms.hasOwnProperty('speed')) pass.uniforms.speed.value = speed;
                 if (pass.uniforms.hasOwnProperty('threshold')) pass.uniforms.threshold.value = self.options.in.fade.threshold;
                 if (pass.uniforms.hasOwnProperty('alphaMapAngle')) {
@@ -7415,7 +7525,7 @@ class WebGLPlane {
             }
         });
 
-        this.program.uniforms.strength.value = 1 - progress;
+        this.program.uniforms.strength.value = 1 - settled;
         this.program.uniforms.translate.value.x = this.options.in.translate.x;
         this.program.uniforms.translate.value.y = this.options.in.translate.y;
         this.program.uniforms.translate.value.z = this.options.in.translate.z;
@@ -7438,7 +7548,11 @@ class WebGLPlane {
     }
 
     updateUniformsFromAnimationParams() {
-        if (this.getInParam('progress') < 1) {
+        // Exactly 1 once the entrance has ended (InAnimation's complete); an overshooting easing passes it before.
+        // Set at 1 once more: the last frame before the end was drawn short of it, a fraction of a pixel off the
+        // element, and the mesh stays over the element for a few frames after the end (onEntranceAnimationEnd())
+        const progress = this.getInParam('progress');
+        if (progress !== 1 || this.program.uniforms.progress.value !== 1) {
             if (!this.options.in.lockToScrollbar) this.needsUpdate = true;
             this.updateUniformValues();
         } else {
@@ -7672,10 +7786,59 @@ function removeShared() {
     if (this.aglKey && this.aglCache) this.aglCache.release(this);
 }
 
+;// CONCATENATED MODULE: ./js/shaders/glitch.js
+// The glitch entrance (agl-glitch, main.js), an entrance effect's shader chunk (AnimateGL.registerEntranceEffect(),
+// spliced in by WebGLPlane.shaderSource()). Bands of the element jump sideways, a few blocks shift, and red and blue
+// split apart along each band. Strong at first and calm by about 90% of the entrance, with a new tear about 18 times
+// over it, taken from the progress: no clock, the same each time, and it follows easings that overshoot or step.
+// In the first half of an entrance of a second or longer, the element also blinks out at most twice, so never more
+// than three flashes a second (WCAG 2.3.1); shorter entrances don't blink. Cheap on purpose: one pass, no loops, a
+// hash per band and per block, three texture reads with the split, and nothing while the amount is 0 (once the
+// entrance has ended).
+const glitch = {
+    // glitchBlink: whether it blinks, from the entrance's duration (WebGLPlane.addEffectUniforms())
+    uniforms: { glitchIn: 1, glitchBlink: (plane) => (plane.options.in.duration >= 1000 ? 1 : 0) },
+    // progress has the vertex shader's precision, as a uniform the two share must
+    fragmentHead: `uniform mediump float progress;
+uniform float glitchIn;
+uniform float glitchBlink;
+float glitchAmount;
+float glitchProgress;
+vec2 glitchShift;
+float glitchHash(vec2 v) { return fract(sin(dot(v, vec2(12.9898, 78.233))) * 43758.5453); }
+vec2 glitchUv(vec2 p, float amount, float seed) {
+    float band = floor(p.y * 12. + glitchHash(vec2(seed, 3.1)) * 6.);
+    float r = glitchHash(vec2(band, seed));
+    // About a third of the bands move, each its own way
+    float moved = step(.65, r);
+    p.x += (r - .825) * moved * amount * .6;
+    // A few blocks shift on their own
+    vec2 cell = floor(p * vec2(5., 9.)) + seed;
+    float b = glitchHash(cell);
+    p += step(.93, b) * (vec2(glitchHash(cell + 7.3), b) - .5) * amount * .25;
+    glitchShift = vec2((.5 + moved) * (r - .5) * .05 * amount, 0.);
+    return p;
+}`,
+    fragmentUv: `glitchShift = vec2(0.);
+glitchProgress = clamp(progress, 0., 1.);
+glitchAmount = progress < 1. ? (1. - smoothstep(.5, .9, glitchProgress)) * glitchIn : 0.;
+if(glitchAmount > 0.) p = glitchUv(p, glitchAmount, floor(glitchProgress * 18.) + 1.);`,
+    // Red and blue sampled apart, inside the element's own shape (as Pro's colour splits do)
+    fragmentColor: `if(glitchAmount > 0.) {
+    if(glitchShift != vec2(0.)) {
+        vec4 red = texture2D(tMap, uv + glitchShift);
+        vec4 blue = texture2D(tMap, uv - glitchShift);
+        color.rgb = color.a > 0. ? min(vec3(red.r, color.g * color.a, blue.b) / color.a, 1.) : vec3(0.);
+    }
+    if(glitchBlink > 0. && glitchProgress < .5) color.a *= step(.3, glitchHash(vec2(floor(glitchProgress * 6.), 5.7)));
+}`,
+};
+
 ;// CONCATENATED MODULE: ./js/webgl.js
 // The webgl chunk (animategl.webgl.min.js): OGL, the shaders, the WebGL half of each element (WebGLPlane.js) and the
 // render loop. The core (main.js) loads it with webglLoader.js the first time an element needs WebGL: a WebGL
 // entrance, or an image whose scroll or hover effect draws it. Pages with only CSS animations never load it.
+
 
 
 
@@ -7690,6 +7853,12 @@ function install() {
     installed = true;
     for (const name of Object.getOwnPropertyNames(WebGLPlane.prototype)) {
         if (name !== 'constructor') AnimatedPlane/* AnimatedPlane.prototype */.Z.prototype[name] = WebGLPlane.prototype[name];
+    }
+    // The core's entrance effects (agl-glitch). Under reduced motion the preset is a plain fade.
+    const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    const Animations = window.AnimateGL;
+    if (Animations && Animations.registerEntranceEffect && !reducedMotion && !Animations.entranceEffects.glitch) {
+        Animations.registerEntranceEffect('glitch', { shader: glitch });
     }
 }
 

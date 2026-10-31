@@ -18,78 +18,98 @@ if (!defined('ABSPATH')) {
 
 // Elementor 4's atomic elements (Div block, Flexbox, Heading, Paragraph, Image, …), on by default for sites
 // installed with Elementor 4.0 or later. They have no Motion Effects section, so el.php's controls never reach
-// them. Here the same controls, the ones el.php adds and the ones added on animategl_elementor_controls, are
-// read once and turned into atomic props and controls, and on the page the same element_classes() (with
-// animategl_elementor_classes) runs on a stand-in for the element, whose classes and attributes are added
-// to its first tag.
+// them. Here AnimateGL_Controls' controls (includes/controls.php) become atomic props and controls, as el.php makes
+// classic controls of them, and so do the classic controls added on animategl_elementor_controls. On the page, the
+// element's settings become AnimateGL_Control_Values for AnimateGL_Controls::classes(), and a stand-in for the
+// element for animategl_elementor_classes; the classes and attributes are added to its first tag.
 class AnimateGL_El_Atomic
 {
-	private $el;
-	private $controls;
+	private $legacy;
+	private $recorded;
 	private $stack = array();
 
-	public function __construct($el)
+	public function __construct()
 	{
-		$this->el = $el;
 		add_filter('elementor/atomic-widgets/props-schema', array($this, 'props_schema'));
 		add_filter('elementor/atomic-widgets/controls', array($this, 'controls'), 10, 2);
 		add_action('elementor/frontend/before_render', array($this, 'before_render'));
 		add_action('elementor/frontend/after_render', array($this, 'after_render'));
 	}
 
-	// The entrance presets for the atomic panel's select, which can't be filled in the browser as el-editor.js
-	// does for the classic panel. Add-ons add theirs with animategl_elementor_entrance_options.
+	// Kept for add-ons that called it: the list is AnimateGL_Controls' now
 	public static function entrance_options()
 	{
-		$css = __('CSS', 'animategl');
-		$webgl = __('WebGL', 'animategl');
-		$options = array(
-			array('value' => '', 'label' => __('None', 'animategl')),
-			array('value' => 'custom', 'label' => __('Default', 'animategl')),
-			array('value' => 'fadeCSS', 'label' => __('Fade', 'animategl') . ' (' . $css . ')'),
-			array('value' => 'zoomInCSS', 'label' => __('Zoom In', 'animategl') . ' (' . $css . ')'),
-			array('value' => 'zoomOutCSS', 'label' => __('Zoom Out', 'animategl') . ' (' . $css . ')'),
-			array('value' => 'wipeCSS', 'label' => __('Wipe', 'animategl') . ' (' . $css . ')'),
-			array('value' => 'slideCSS', 'label' => __('Slide', 'animategl') . ' (' . $css . ')'),
-			array('value' => 'fade', 'label' => __('Fade', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'flip', 'label' => __('Flip', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'slide', 'label' => __('Slide', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'stretch', 'label' => __('Stretch', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'bend', 'label' => __('Bend', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'peel', 'label' => __('Peel', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'zoomIn', 'label' => __('Zoom In', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'zoomOut', 'label' => __('Zoom Out', 'animategl') . ' (' . $webgl . ')'),
-			array('value' => 'glitch', 'label' => __('Glitch', 'animategl') . ' (' . $webgl . ')'),
-		);
-		return apply_filters('animategl_elementor_entrance_options', $options);
+		return AnimateGL_Controls::entrance_options();
 	}
 
-	// name => the classic control's arguments, as el.php's add_section() adds them
-	public function recorded()
+	// name => the classic control's arguments, for the controls added on animategl_elementor_controls
+	private function legacy()
 	{
-		if (null === $this->controls) {
+		if (null === $this->legacy) {
 			$recorder = new AnimateGL_El_Atomic_Recorder();
-			$this->el->add_section($recorder);
-			$this->controls = $recorder->controls;
-			$this->controls['agl_in_name']['options'] = array();
-			foreach (self::entrance_options() as $option) {
-				$this->controls['agl_in_name']['options'][$option['value']] = $option['label'];
+			do_action('animategl_elementor_controls', $recorder);
+			$this->legacy = array_diff_key($recorder->controls, AnimateGL_Controls::all());
+		}
+		return $this->legacy;
+	}
+
+	// name => control, as AnimateGL_Controls has them: its own, then the classic ones added on
+	// animategl_elementor_controls
+	public function all()
+	{
+		$controls = AnimateGL_Controls::all();
+		foreach ($this->legacy() as $name => $args) {
+			$control = self::from_classic($args);
+			if ($control) {
+				$controls[$name] = $control;
 			}
 		}
-		return $this->controls;
+		return $controls;
+	}
+
+	// name => the classic control's arguments, for the stand-in: AnimateGL_Controls' as el.php adds them, and the
+	// ones added on animategl_elementor_controls
+	public function recorded()
+	{
+		if (null === $this->recorded) {
+			$this->recorded = array_map(array('AnimateGL_El', 'control_args'), AnimateGL_Controls::all()) + $this->legacy();
+		}
+		return $this->recorded;
+	}
+
+	// A classic control's arguments as an AnimateGL_Controls control, or null for a type with no atomic control.
+	// agl_elements: the elements that get it, by name without the e- prefix.
+	private static function from_classic($args)
+	{
+		$types = array('select' => 'select', 'switcher' => 'switch', 'slider' => 'range', 'number' => 'number', 'text' => 'text', 'color' => 'color', 'media' => 'image');
+		$type = isset($args['type']) && isset($types[$args['type']]) ? $types[$args['type']] : '';
+		if (!$type) {
+			return null;
+		}
+		$control = array('type' => $type) + array_intersect_key($args, array('label' => 0, 'description' => 0, 'options' => 0, 'condition' => 0, 'min' => 0, 'max' => 0, 'step' => 0));
+		if (isset($args['agl_elements'])) {
+			$control['elements'] = (array) $args['agl_elements'];
+		}
+		$default = isset($args['default']) ? $args['default'] : null;
+		if ('switch' === $type) {
+			$control['default'] = 'yes' === $default;
+		} elseif ('range' === $type) {
+			$control = array_intersect_key(isset($args['range']) && is_array($args['range']) ? (array) reset($args['range']) : array(), array('min' => 0, 'max' => 0, 'step' => 0)) + $control;
+			$control['default'] = is_array($default) && isset($default['size']) ? $default['size'] : 0;
+		} elseif (null !== $default) {
+			$control['default'] = $default;
+		}
+		return $control;
 	}
 
 	public function props_schema($schema)
 	{
-		foreach ($this->recorded() as $name => $args) {
+		foreach ($this->all() as $name => $control) {
 			if (isset($schema[$name])) {
 				continue;
 			}
-			$prop = $this->prop($args);
-			if (!$prop) {
-				continue;
-			}
-			$dependencies = $this->dependencies(isset($args['condition']) ? $args['condition'] : array());
+			$prop = $this->prop($control);
+			$dependencies = $this->dependencies(isset($control['condition']) ? $control['condition'] : array());
 			if ($dependencies) {
 				$prop->set_dependencies($dependencies);
 			}
@@ -98,28 +118,22 @@ class AnimateGL_El_Atomic
 		return $schema;
 	}
 
-	private function prop($args)
+	private function prop($control)
 	{
-		$default = isset($args['default']) ? $args['default'] : null;
-		switch (isset($args['type']) ? $args['type'] : '') {
-			case 'select':
-			case 'text':
-			case 'color':
-				return String_Prop_Type::make()->default((string) $default);
-			case 'slider':
-				return Number_Prop_Type::make()->default(is_array($default) && isset($default['size']) ? $default['size'] + 0 : 0);
+		$default = AnimateGL_Controls::value($control, null);
+		switch ($control['type']) {
+			case 'switch':
+				return Boolean_Prop_Type::make()->default($default);
+			case 'range':
 			case 'number':
-				return Number_Prop_Type::make()->default(is_numeric($default) ? $default + 0 : 0);
-			case 'switcher':
-				return Boolean_Prop_Type::make()->default('yes' === $default);
-			case 'media':
+				return Number_Prop_Type::make()->default($default);
+			case 'image':
 				return Image_Prop_Type::make();
 		}
-		return null;
+		return String_Prop_Type::make()->default($default);
 	}
 
-	// A classic condition (array('agl_in_name!' => '', 'agl_hover' => array(…))) as a prop dependency that
-	// hides the control
+	// A condition (array('agl_in_name!' => '', 'agl_hover' => array(…))) as a prop dependency that hides the control
 	private function dependencies($condition)
 	{
 		if (!$condition) {
@@ -143,30 +157,36 @@ class AnimateGL_El_Atomic
 		return $manager->get();
 	}
 
+	// The element's name without the e- prefix (e-image is image)
+	private static function element_name($element)
+	{
+		return preg_replace('/^e-/', '', (string) $element->get_name());
+	}
+
+	// The controls an element gets
+	private function for_element($element_name)
+	{
+		return array_filter($this->all(), function ($control) use ($element_name) {
+			return !isset($control['elements']) || in_array($element_name, (array) $control['elements'], true);
+		});
+	}
+
 	public function controls($controls, $element)
 	{
 		$items = array();
 		$schema = $element::get_props_schema();
-		$element_name = preg_replace('/^e-/', '', (string) $element->get_name());
-		foreach ($this->recorded() as $name => $args) {
+		foreach ($this->for_element(self::element_name($element)) as $name => $control) {
 			if (!isset($schema[$name])) {
 				continue;
 			}
-			// Controls for some elements only, by name without the e- prefix (agl_elements)
-			if (isset($args['agl_elements']) && !in_array($element_name, (array) $args['agl_elements'], true)) {
-				continue;
+			$item = $this->control($name, $control);
+			if (!empty($control['label'])) {
+				$item->set_label((string) $control['label']);
 			}
-			$control = $this->control($name, $args);
-			if (!$control) {
-				continue;
+			if (!empty($control['description'])) {
+				$item->set_description(wp_strip_all_tags((string) $control['description']));
 			}
-			if (!empty($args['label'])) {
-				$control->set_label((string) $args['label']);
-			}
-			if (!empty($args['description'])) {
-				$control->set_description(wp_strip_all_tags((string) $args['description']));
-			}
-			$items[] = $control;
+			$items[] = $item;
 		}
 		if ($items) {
 			$controls[] = Section::make()
@@ -177,40 +197,53 @@ class AnimateGL_El_Atomic
 		return $controls;
 	}
 
-	private function control($name, $args)
+	private function control($name, $control)
 	{
-		switch (isset($args['type']) ? $args['type'] : '') {
+		switch ($control['type']) {
 			case 'select':
 				$options = array();
-				foreach (isset($args['options']) ? $args['options'] : array() as $value => $label) {
+				foreach (isset($control['options']) ? $control['options'] : array() as $value => $label) {
 					$options[] = array('value' => (string) $value, 'label' => (string) $label);
 				}
 				return Select_Control::bind_to($name)->set_options($options);
-			case 'text':
-			// No colour control for atomic props: a CSS colour typed in
-			case 'color':
-				return Text_Control::bind_to($name);
-			case 'slider':
-				$control = Number_Control::bind_to($name);
-				$range = isset($args['range']) && is_array($args['range']) ? reset($args['range']) : array();
-				if (isset($range['min'])) {
-					$control->set_min((int) $range['min']);
+			case 'range':
+				$item = Number_Control::bind_to($name);
+				if (isset($control['min'])) {
+					$item->set_min((int) $control['min']);
 				}
-				if (isset($range['max'])) {
-					$control->set_max((int) $range['max']);
+				if (isset($control['max'])) {
+					$item->set_max((int) $control['max']);
 				}
-				if (isset($range['step']) && (int) $range['step'] == $range['step']) {
-					$control->set_step((int) $range['step']);
+				if (isset($control['step']) && (int) $control['step'] == $control['step']) {
+					$item->set_step((int) $control['step']);
 				}
-				return $control;
+				return $item;
 			case 'number':
 				return Number_Control::bind_to($name);
-			case 'switcher':
+			case 'switch':
 				return Switch_Control::bind_to($name);
-			case 'media':
+			case 'image':
 				return Image_Control::bind_to($name);
 		}
-		return null;
+		// text, and color: there's no colour control for atomic props, so a CSS colour typed in
+		return Text_Control::bind_to($name);
+	}
+
+	// The values of AnimateGL_Controls' controls in an atomic element's settings
+	private static function element_values($element, $settings)
+	{
+		$values = array();
+		$name = self::element_name($element);
+		foreach (AnimateGL_Controls::for_element($name) as $key => $control) {
+			$value = isset($settings[$key]) ? $settings[$key] : null;
+			if ('image' === $control['type']) {
+				$value = is_array($value) && isset($value['src']) ? $value['src'] : '';
+			} elseif (is_array($value)) {
+				$value = null;
+			}
+			$values[$key] = AnimateGL_Controls::value($control, $value);
+		}
+		return new AnimateGL_Control_Values($values, $name, $element->get_id());
 	}
 
 	private static function is_atomic($element)
@@ -227,10 +260,15 @@ class AnimateGL_El_Atomic
 		}
 		$item = null;
 		try {
-			$stand_in = new AnimateGL_El_Atomic_Element($element, $element->get_atomic_settings(), $this->recorded());
-			$classes = $this->el->element_classes($stand_in);
-			if ($classes || $stand_in->attributes) {
-				$item = array('classes' => $classes, 'attributes' => $stand_in->attributes);
+			$settings = $element->get_atomic_settings();
+			$values = self::element_values($element, $settings);
+			$classes = implode(' ', AnimateGL_Controls::classes($values));
+			// For the controls added on animategl_elementor_classes
+			$stand_in = new AnimateGL_El_Atomic_Element($element, $settings, $this->recorded());
+			$classes = trim((string) apply_filters('animategl_elementor_classes', $classes, $stand_in));
+			$attributes = $values->attributes + $stand_in->attributes;
+			if ($classes || $attributes) {
+				$item = array('classes' => $classes, 'attributes' => $attributes);
 				ob_start();
 			}
 		} catch (\Throwable $e) {
@@ -287,7 +325,7 @@ class AnimateGL_El_Atomic
 	}
 }
 
-// Takes the controls el.php's add_section() adds, without an element
+// Takes the classic controls added on animategl_elementor_controls, without an element
 class AnimateGL_El_Atomic_Recorder
 {
 	public $controls = array();
@@ -308,7 +346,7 @@ class AnimateGL_El_Atomic_Recorder
 	}
 }
 
-// An atomic element as element_classes() and the animategl_elementor_classes filters expect a classic one: its
+// An atomic element as the animategl_elementor_classes filters expect a classic one: its
 // settings in the classic shapes (a slider is array('size' => …), a switcher 'yes', a media control
 // array('url' => …)), its name without the e- prefix (e-image is image), and its render attributes for '_wrapper'.
 class AnimateGL_El_Atomic_Element
@@ -373,7 +411,7 @@ class AnimateGL_El_Atomic_Element
 		$attributes = is_array($key) ? $key : array($key => $value);
 		foreach ($attributes as $name => $attribute) {
 			if ('class' === $name) {
-				continue; // element_classes() returns those
+				continue; // animategl_elementor_classes returns those
 			}
 			$this->attributes[(string) $name] = is_array($attribute) ? implode(' ', $attribute) : (string) $attribute;
 		}

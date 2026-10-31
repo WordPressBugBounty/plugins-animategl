@@ -16,6 +16,8 @@
 			options.rootFolder = settings[1]
 			// The webgl chunk's URL from PHP, which still holds when an optimization plugin moved this runtime
 			if (settings[3]) options.webglSrc = settings[3]
+			// The WebGL canvas's z-index from the Settings tab (999 unless changed)
+			if (settings[4] !== null && settings[4] !== undefined) options.zIndex = settings[4]
 
 			if (options.in) {
 				// Reset presets to global presets

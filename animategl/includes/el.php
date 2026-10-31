@@ -64,7 +64,7 @@ class AnimateGL_El
 		// Elementor 4's atomic elements have no Motion Effects section: the same controls and classes through their own hooks
 		if (class_exists('Elementor\Modules\AtomicWidgets\Controls\Section')) {
 			include_once($this->plugin_dir_path . 'includes/el-atomic.php');
-			new AnimateGL_El_Atomic($this);
+			new AnimateGL_El_Atomic();
 		}
 
 		// Front end only (this also covers the Elementor preview), not every admin and REST request
@@ -82,50 +82,93 @@ class AnimateGL_El
 		});
 	}
 
-	// Slider settings can be null (Elementor 3.26+): fall back to the control's default
-	private function get_slider_size($element, $key, $default)
+	// A classic control's arguments for one of AnimateGL_Controls'
+	public static function control_args($control)
 	{
-		$value = $element->get_settings($key);
-		return is_array($value) && isset($value['size']) && is_numeric($value['size']) ? $value['size'] + 0 : $default;
+		$types = array(
+			'select' => Controls_Manager::SELECT,
+			'switch' => Controls_Manager::SWITCHER,
+			'range' => Controls_Manager::SLIDER,
+			'number' => Controls_Manager::NUMBER,
+			'text' => Controls_Manager::TEXT,
+			'color' => Controls_Manager::COLOR,
+			'image' => Controls_Manager::MEDIA,
+		);
+		$args = array(
+			'label' => isset($control['label']) ? $control['label'] : '',
+			'type' => $types[$control['type']],
+			'render_type' => 'none',
+		);
+		foreach (array('description', 'options', 'condition') as $key) {
+			if (!empty($control[$key])) {
+				$args[$key] = $control[$key];
+			}
+		}
+		$default = isset($control['default']) ? $control['default'] : null;
+		switch ($control['type']) {
+			case 'switch':
+				$args['default'] = $default ? 'yes' : 'no';
+				break;
+			case 'range':
+				// Without a unit, Elementor still needs one to find the range: ms, as distances were saved with it
+				$unit = empty($control['unit']) ? 'ms' : $control['unit'];
+				$args['range'] = array($unit => array_intersect_key($control, array('min' => 0, 'max' => 0, 'step' => 0)));
+				$args['size_units'] = empty($control['unit']) ? array() : array($unit);
+				$args['default'] = array('unit' => $unit, 'size' => is_numeric($default) ? $default + 0 : 0);
+				break;
+			case 'number':
+				$args += array_intersect_key($control, array('min' => 0, 'max' => 0, 'step' => 0));
+				$args['default'] = is_numeric($default) ? $default + 0 : 0;
+				break;
+			case 'select':
+			case 'text':
+				$args['default'] = is_string($default) ? $default : '';
+				break;
+		}
+		if (isset($control['elementor']) && is_array($control['elementor'])) {
+			$args = $control['elementor'] + $args;
+		}
+		return $args;
 	}
 
-	// The classes for an element's AnimateGL settings. $element can also be an atomic element's stand-in (el-atomic.php).
+	// The values of AnimateGL_Controls' controls in a classic element's settings
+	public static function element_values($element)
+	{
+		$values = array();
+		foreach (AnimateGL_Controls::for_element($element->get_name()) as $name => $control) {
+			// A global colour picked in a colour control is in the settings for display, as var(--e-global-color-…)
+			$value = 'color' === $control['type'] && method_exists($element, 'get_settings_for_display') ? $element->get_settings_for_display($name) : $element->get_settings($name);
+			switch ($control['type']) {
+				case 'switch':
+					$value = null === $value ? null : 'yes' === $value;
+					break;
+				// Slider settings can be null (Elementor 3.26+): the default
+				case 'range':
+					$value = is_array($value) && isset($value['size']) ? $value['size'] : null;
+					break;
+				case 'image':
+					$value = is_array($value) && isset($value['url']) ? $value['url'] : '';
+					break;
+			}
+			$values[$name] = AnimateGL_Controls::value($control, $value);
+		}
+		return new AnimateGL_Control_Values($values, $element->get_name(), $element->get_id());
+	}
+
+	// The classes for a classic element's AnimateGL settings; its attributes are added to it
 	public function element_classes($element)
 	{
-		$agl_in_name = $element->get_settings('agl_in_name');
-		$classes = '';
-
-		// Settings end up in the class attribute, so accept only class-safe names and numbers
-		if ($agl_in_name && AnimateGL::is_class_token($agl_in_name)) {
-			$direction = $element->get_settings('agl_in_direction');
-			$classes = $agl_in_name == 'custom' ? 'agl' : 'agl agl-' . $agl_in_name . (AnimateGL::is_class_token($direction) ? $direction : '');
-			$duration = $this->get_slider_size($element, 'agl_in_duration', 1000);
-			$delay = $this->get_slider_size($element, 'agl_in_delay', 0);
-			$distance = $this->get_slider_size($element, 'agl_in_distance', 1);
-			$classes .= ' agl-in-duration-' . $duration;
-			$classes .= ' agl-in-delay-' . $delay;
-			$classes .= ' agl-in-distance-' . $distance;
-			$easing = $element->get_settings('agl_in_easing');
-			if ($easing && AnimateGL::is_class_token($easing))
-				$classes .= ' agl-in-easing-' . $easing;
-			$repeat = $element->get_settings('agl_in_repeat');
-			if ($repeat == 'yes')
-				$classes .= ' agl-in-repeat';
-			$loctToScrollbar = $element->get_settings('agl_in_lockToScrollbar');
-				if ($loctToScrollbar == 'yes')
-					$classes .= ' agl-in-lockToScrollbar';
+		$values = self::element_values($element);
+		$classes = implode(' ', AnimateGL_Controls::classes($values));
+		foreach ($values->attributes as $name => $value) {
+			$element->add_render_attribute('_wrapper', $name, $value);
 		}
-
-		// The Elementor side of animategl_block_classes, for the controls added on animategl_elementor_controls
+		// For the controls added on animategl_elementor_controls
 		return trim((string) apply_filters('animategl_elementor_classes', $classes, $element));
 	}
 
 	public function add_section($element)
 	{
-
-		$name = $element->get_name();
-
-
 		$element->start_controls_section(
 			'agl_section',
 			[
@@ -134,210 +177,14 @@ class AnimateGL_El
 			]
 		);
 
-		$element->add_control(
-			'agl_in_name',
-			[
-				'label' => __('Entrance Animation', 'animategl'),
-				'type' => Controls_Manager::SELECT,
-				'separator' => 'before',
-				'options' => [
-					// '' => __('None', 'animategl'),
-					// 'fadeCSS' => __('Fade', 'animategl'),
-					// 'zoomInCSS' => __('Zoom In', 'animategl'),
-					// 'zoomOutCSS' => __('Zoom Out', 'animategl'),
-					// 'wipeCSS' => __('Wipe', 'animategl'),
-					// 'slideCSS' => __('Slide', 'animategl'),
-					// 'fade' => __('Fade WebGL', 'animategl'),
-					// 'flip' => __('Flip WebGL', 'animategl'),
-					// 'slide' => __('Slide WebGL', 'animategl'),
-					// 'stretch' => __('Stretch WebGL', 'animategl'),
-					// 'bend' => __('Bend WebGL', 'animategl'),
-					// 'peel' => __('Peel WebGL', 'animategl'),
-					// 'wipe' => __('Wipe WebGL', 'animategl'),
-					// 'zoomIn' => __('Zoom In WebGL', 'animategl'),
-					// 'custom' => __('Custom', 'animategl'),
+		foreach (AnimateGL_Controls::for_element($element->get_name()) as $name => $control) {
+			$element->add_control($name, self::control_args($control));
+		}
 
-				],
-				'default' => '',
-				'render_type'        => 'none',
-				'frontend_available' => true,
-			]
-		);
-
-		$element->add_control(
-			'agl_in_direction',
-			[
-				'label' => __('Direction', 'animategl'),
-				'type' => Controls_Manager::SELECT,
-				'separator' => 'before',
-				'options' => [
-					'' => __('Default', 'animategl'),
-					'Left' => __('Left', 'animategl'),
-					'Right' => __('Right', 'animategl'),
-					'Up' => __('Up', 'animategl'),
-					'Down' => __('Down', 'animategl'),
-
-				],
-				'default' => '',
-				'render_type'        => 'none',
-				'frontend_available' => true,
-				'condition' => [
-					'agl_in_name!' => '',
-				],
-			]
-		);
-
-		$element->add_control(
-			'agl_in_duration',
-			[
-				'label' => esc_html__('Duration', 'animategl'),
-				'type' => Controls_Manager::SLIDER,
-				'range' => [
-					'ms' => [
-						'max' => 3000,
-						'min' => 0,
-						'step' => 100,
-					],
-				],
-				'size_units' => ['ms'],
-				'default' => [
-					'unit' => 'ms',
-					'size' => 1000,
-				],
-				'frontend_available' => true,
-				'render_type'        => 'none',
-				'condition' => [
-					'agl_in_name!' => '',
-				],
-			]
-		);
-
-		$element->add_control(
-			'agl_in_delay',
-			[
-				'label' => esc_html__('Delay', 'animategl'),
-				'type' => Controls_Manager::SLIDER,
-				'range' => [
-					'ms' => [
-						'max' => 5000,
-						'min' => 0,
-						'step' => 100,
-					],
-				],
-				'size_units' => ['ms'],
-				'default' => [
-					'unit' => 'ms',
-					'size' => 0,
-				],
-				'frontend_available' => true,
-				'render_type'        => 'none',
-				'condition' => [
-					'agl_in_name!' => '',
-				],
-
-			]
-		);
-
-		$element->add_control(
-			'agl_in_distance',
-			[
-				'label' => esc_html__('Distance', 'animategl'),
-				'type' => Controls_Manager::SLIDER,
-				'range' => [
-					'ms' => [
-						'max' => 5,
-						'min' => 0,
-						'step' => 0.01,
-					],
-				],
-				'size_units' => [],
-				'default' => [
-					'unit' => 'ms',
-					'size' => 1,
-				],
-				'frontend_available' => true,
-				'render_type'        => 'none',
-				'condition' => [
-					'agl_in_name!' => '',
-				],
-
-			]
-		);
-
-		$element->add_control(
-			'agl_in_repeat',
-			[
-				'label' => esc_html__('Repeat', 'animategl'),
-				'type' => Controls_Manager::SWITCHER,
-				'default' => 'no',
-				'render_type'        => 'none',
-				'frontend_available' => true,
-				'condition' => [
-					'agl_in_name!' => '',
-				],
-			]
-		);
-
-		$element->add_control(
-			'agl_in_lockToScrollbar',
-			[
-				'label' => esc_html__('Lock to Scrollbar', 'animategl'),
-				'type' => Controls_Manager::SWITCHER,
-				'default' => 'no',
-				'render_type'        => 'none',
-				'frontend_available' => true,
-				'condition' => [
-					'agl_in_name!' => '',
-				],
-			]
-		);
-
-		$element->add_control(
-			'agl_in_easing',
-			[
-				'label' => __('Easing', 'animategl'),
-				'type' => Controls_Manager::SELECT,
-				'separator' => 'before',
-				'options' => [
-					'' => __('Default', 'animategl'),
-					'linear' => __('Linear', 'animategl'),
-					'easeOutSine' => __('easeOutSine', 'animategl'),
-					'easeInSine' => __('easeInSine', 'animategl'),
-					'easeInOutSine' => __('easeInOutSine', 'animategl'),
-					'easeOutQuad' => __('easeOutQuad', 'animategl'),
-					'easeInQuad' => __('easeInQuad', 'animategl'),
-					'easeInOutQuad' => __('easeInOutQuad', 'animategl'),
-					'easeOutCubic' => __('easeOutCubic', 'animategl'),
-					'easeInCubic' => __('easeInCubic', 'animategl'),
-					'easeInOutCubic' => __('easeInOutCubic', 'animategl'),
-					'easeOutExpo' => __('easeOutExpo', 'animategl'),
-					'easeInExpo' => __('easeInExpo', 'animategl'),
-					'easeInOutExpo' => __('easeInOutExpo', 'animategl'),
-					'easeOutBack' => __('easeOutBack', 'animategl'),
-					'easeInOutBack' => __('easeInOutBack', 'animategl'),
-					'easeInBack' => __('easeInBack', 'animategl'),
-					'easeOutElastic' => __('easeOutElastic', 'animategl'),
-					'easeOutBounce' => __('easeOutBounce', 'animategl'),
-					'spring-soft' => __('Spring, soft', 'animategl'),
-					'spring-bouncy' => __('Spring, bouncy', 'animategl'),
-					'spring-stiff' => __('Spring, stiff', 'animategl'),
-					'steps-5' => __('Steps, 5', 'animategl'),
-					'steps-10' => __('Steps, 10', 'animategl'),
-				],
-				'description' => __('A spring easing sets its own duration.', 'animategl'),
-				'default' => '',
-				'render_type'        => 'none',
-				'frontend_available' => true,
-				'condition' => [
-					'agl_in_name!' => '',
-				],
-			]
-		);
-
-		// Add controls to the AnimateGL section. Turn their settings into classes with animategl_elementor_classes.
+		// Elementor controls of add-ons that don't use animategl_controls. Turn their settings into classes with
+		// animategl_elementor_classes.
 		do_action('animategl_elementor_controls', $element);
 
 		$element->end_controls_section(); // END ENTRANCE SECTION / PANEL
-
 	}
 }

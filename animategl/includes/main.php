@@ -51,9 +51,22 @@ class AnimateGL
 		add_filter('register_block_type_args', array($this, 'register_block_attributes'), 10, 2);
 		add_filter('render_block', array($this, 'render_block'), 10, 2);
 
+		// The controls for page builders (el.php, bricks.php, divi.php)
+		include_once($this->plugin_dir_path . 'includes/controls.php');
+
 		// The free hover and scroll effects
 		include_once($this->plugin_dir_path . 'includes/effects.php');
 		new AnimateGL_Effects();
+
+		// Count-up numbers and the typewriter
+		include_once($this->plugin_dir_path . 'includes/count.php');
+		include_once($this->plugin_dir_path . 'includes/typewriter.php');
+		new AnimateGL_Count();
+		new AnimateGL_Typewriter();
+
+		// The Settings tab on the AnimateGL page (extensions add their fields to it)
+		include_once($this->plugin_dir_path . 'includes/settings.php');
+		new AnimateGL_Settings();
 
 
 
@@ -102,6 +115,18 @@ class AnimateGL
 			AnimateGL_El::get_instance();
 		}
 
+		// The Bricks builder, a theme
+		if (defined('BRICKS_VERSION')) {
+			include_once(plugin_dir_path(ANIMATE_GL_FILE) . '/includes/bricks.php');
+			new AnimateGL_Bricks();
+		}
+
+		// Divi 5, the theme or the Divi Builder plugin
+		if (function_exists('et_builder_d5_enabled') && et_builder_d5_enabled()) {
+			include_once(plugin_dir_path(ANIMATE_GL_FILE) . 'includes/divi.php');
+			new AnimateGL_Divi();
+		}
+
 		$version      = $this->version;
 		$defer        = array('in_footer' => true, 'strategy' => 'defer');
 
@@ -140,10 +165,11 @@ class AnimateGL
 		}
 	}
 
-	// Settings for embed.js: [saved animation settings (JSON), plugin URL, (the admin page's AJAX URL), webgl chunk URL]
+	// Settings for embed.js: [saved animation settings (JSON), plugin URL, (the admin page's AJAX URL), webgl chunk URL,
+	// the WebGL canvas's z-index]
 	private function options_script()
 	{
-		return 'var agl_options = ' . wp_json_encode(array(get_option('agl_json'), $this->plugin_dir_url, null, $this->webgl_url())) . ';';
+		return 'var agl_options = ' . wp_json_encode(array(get_option('agl_json'), $this->plugin_dir_url, null, $this->webgl_url(), AnimateGL_Settings::canvas_z_index())) . ';';
 	}
 
 	// The webgl chunk's URL, which the runtime loads only when a page needs WebGL. Passed to it because optimization

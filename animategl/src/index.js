@@ -25,6 +25,8 @@ import { animationClasses } from './classes';
 import { Section } from './section';
 import { previewAnimation, stopPreview } from './preview';
 import './effects';
+import './count';
+import './typewriter';
 
 /**
  * Plays the block's animation shortly after an animation or direction is picked, so picks in quick
@@ -92,6 +94,9 @@ const directionLabel = ( direction ) => {
 		CircleTopRight: __( 'Circle from top right', 'animategl' ),
 		CircleBottomLeft: __( 'Circle from bottom left', 'animategl' ),
 		CircleBottomRight: __( 'Circle from bottom right', 'animategl' ),
+		Mask: __( 'Mask', 'animategl' ),
+		In: __( 'In', 'animategl' ),
+		Out: __( 'Out', 'animategl' ),
 	};
 	if ( labels[ direction ] !== undefined ) return labels[ direction ];
 	// A key from an add-on pack: its camel case as words, e.g. SlideFar -> Slide far
@@ -278,6 +283,9 @@ function AnimationControls( props ) {
 							} }
 						/>
 					) }
+
+					{ /* Controls for the picked variant, from other plugins. They get the block's edit props. */ }
+					{ applyFilters( 'animategl.variant', null, props ) }
 
 					<RangeControl
 						__next40pxDefaultSize

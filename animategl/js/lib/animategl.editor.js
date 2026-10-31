@@ -2398,6 +2398,11 @@ class Gui {
 			}
 		}
 
+		// Saved before the CSS entrances had them
+		options.in.skew = Object.assign({ x: 0, y: 0 }, options.in.skew)
+		if (typeof options.in.blur !== 'number') options.in.blur = 0
+		if (typeof options.in.origin !== 'string') options.in.origin = ''
+
 		function dispatchEvent(type) {
 			const event = new CustomEvent(type, { detail: options });
 			window.dispatchEvent(event)
@@ -2485,6 +2490,9 @@ class Gui {
 				gui.in.fade.hide()
 				gui.in.corners.hide()
 				gui.in.scale.domElement.style.display = ''
+				gui.in.blur.domElement.style.display = ''
+				gui.in.skew.show()
+				gui.in.origin.domElement.style.display = ''
 				gui.in.clipPath.show()
 				gui.in.presetCSS.domElement.style.display = ''
 				gui.in.presetWebGL.domElement.style.display = 'none'
@@ -2492,6 +2500,9 @@ class Gui {
 				gui.in.fade.show()
 				gui.in.corners.show()
 				gui.in.scale.domElement.style.display = 'none'
+				gui.in.blur.domElement.style.display = 'none'
+				gui.in.skew.hide()
+				gui.in.origin.domElement.style.display = 'none'
 				gui.in.clipPath.hide()
 				gui.in.presetCSS.domElement.style.display = 'none'
 				gui.in.presetWebGL.domElement.style.display = ''
@@ -2551,6 +2562,25 @@ class Gui {
 		addGuiOption(gui.in.rotate, options.in.rotate, 'z', -360, 360, 15)
 
 		gui.in.scale = gui.in.add(options.in, 'scale', .01, 3).step(.01).onFinishChange(onOptionChange).name('Scale')
+
+		// CSS only, like Scale: a blur that clears as it plays, a skew that straightens, and the point it turns on
+		gui.in.blur = addGuiOption(gui.in, options.in, 'blur', 0, 40, 1, 'Blur')
+
+		gui.in.skew = gui.in.addFolder('Skew').close()
+		addGuiOption(gui.in.skew, options.in.skew, 'x', -60, 60, 5)
+		addGuiOption(gui.in.skew, options.in.skew, 'y', -60, 60, 5)
+
+		gui.in.origin = gui.in.add(options.in, 'origin', {
+			Center: '',
+			Top: '50% 0%',
+			Bottom: '50% 100%',
+			Left: '0% 50%',
+			Right: '100% 50%',
+			'Top left': '0% 0%',
+			'Top right': '100% 0%',
+			'Bottom left': '0% 100%',
+			'Bottom right': '100% 100%',
+		}).name('Origin').onFinishChange(onOptionChange)
 		
 
 		gui.in.clipPath = gui.in.addFolder('Clip Path').close()

@@ -650,7 +650,7 @@ class AnimatedPlane {
     // Each effect's render() with nothing to do resets what it changed
     resetScrollEffect() {
         this.scrollEffectActive = false;
-        this.scrollEffect.render(this, 0);
+        this.scrollEffect.render(this, 0, true);
     }
 
     resetHoverEffect() {
@@ -853,7 +853,7 @@ class AnimatedPlane {
         if (this.endCSSEntrance) this.endCSSEntrance();
         this.endCSSEntrance = null;
         const params = this.animationParams;
-        if (['translateX', 'translateY', 'translateZ', 'rotateX', 'rotateY', 'rotateZ', 'scale'].some((name) => name in params)) {
+        if (['translateX', 'translateY', 'translateZ', 'rotateX', 'rotateY', 'rotateZ', 'skewX', 'skewY', 'scale'].some((name) => name in params)) {
             this.originalDomElement.style.transform = '';
         }
         if (running) this.showDomElement();
@@ -1281,7 +1281,9 @@ class AnimatedPlane {
         const tr = getComputedStyle(this.originalDomElement).transitionDuration;
         const el = this.originalDomElement;
         el.style.transitionDuration = '0s';
-        el.style.transformOrigin = '50% 50%';
+        // Fold and the corner rotations turn on an edge or a corner; back to the middle once they end
+        const origin = this.options.in.origin;
+        el.style.transformOrigin = origin || '50% 50%';
         // el.style.willChange = 'transform'
         const params = {
             targets: this.originalDomElement,
@@ -1304,6 +1306,17 @@ class AnimatedPlane {
         if (rotate.x) params.rotateX = [rotate.x, 0];
         if (rotate.y) params.rotateY = [rotate.y, 0];
         if (rotate.z) params.rotateZ = [rotate.z, 0];
+
+        const skew = this.options.in.skew || {};
+        if (skew.x) params.skewX = [skew.x, 0];
+        if (skew.y) params.skewY = [skew.y, 0];
+
+        // The blur is put back to the element's own filter when it ends: the one it had before its first entrance,
+        // since a reset() or a replay can leave this one blurred
+        const blur = Number(this.options.in.blur) || 0;
+        if (this.ownFilter === undefined) this.ownFilter = el.style.filter;
+        const filter = this.ownFilter;
+        if (blur > 0) params.filter = [`blur(${blur}px)`, 'blur(0px)'];
 
         // A 3D entrance gets a perspective on its parent while it plays, unless the page gave it one. Counted, so
         // siblings whose entrances overlap give back the parent's own value once the last one ends: restoring each
@@ -1359,6 +1372,8 @@ class AnimatedPlane {
         // What the entrance changed only while it plays, put back when it ends or stopEntrance() stops it
         this.endCSSEntrance = function () {
             if (params.clipPath) el.style.clipPath = 'none';
+            if (params.filter) el.style.filter = filter;
+            if (origin) el.style.transformOrigin = '50% 50%';
             self.setCssFade(null);
             removePerspective();
             el.style.transitionDuration = tr;
@@ -1497,9 +1512,11 @@ class AnimatedPlane {
         if (!this.isCSSAnimation) this.updateMeshOffset(offsetX, offsetY);
     }
 
+    // Without arguments (a lock-to-scrollbar element entering the screen, classesChanged()), the layer's scroll
+    // position: undefined here made the mesh position NaN, so the element was blank until the next scroll event
     onScroll(scrollx, scrolly) {
-        this.scrollX = scrollx;
-        this.scrollY = scrolly;
+        this.scrollX = scrollx === undefined ? this.layer.scrollX || 0 : scrollx;
+        this.scrollY = scrolly === undefined ? this.layer.scrollY || 0 : scrolly;
         if (this.inViewport) {
             this.updatePositions();
             this.updateOffset();
@@ -3280,6 +3297,14 @@ class Layer {
     // Draws now if it's drawing (webgl.js)
     drawNow() {}
 
+    // The page scrolled (main.js). Without the webgl chunk the planes are placed now; with it, webgl.js replaces this
+    // to wake the render loop, whose next frame moves the canvas, places the planes and draws them together. Placed
+    // from the scroll event and drawn in the next animation frame, the drawing landed a frame behind the page on
+    // phones, visibly sliding against the page while it scrolled.
+    scrolled() {
+        this.onScroll(window.scrollX, window.scrollY);
+    }
+
     resize(width, height) {
         if (this.width == width && this.height == height && this.initialized) return;
 
@@ -3609,7 +3634,250 @@ function setUpCssEffects() {
     window.addEventListener('scroll', start, { passive: true });
 }
 
+;// CONCATENATED MODULE: ./js/textStart.js
+// When a text effect (count-up numbers, the typewriter) starts on an element: once per page view, when it comes into
+// view. With an entrance it starts as a CSS entrance starts, or after a WebGL one ends (its snapshot shows the text as
+// the effect starts it). Returns a function that adds an element, which then calls start(element) once.
+function whenTextStarts(start) {
+    const elements = new Map();
+    const begin = (element) => {
+        const state = elements.get(element);
+        if (!state) return;
+        elements.delete(element);
+        observer.unobserve(element);
+        clearInterval(state.poll);
+        start(element);
+    };
+    // Shown as itself without an entrance of its own to wait for: Pro's stagger, text split and device and play once
+    // rules take its agl class off (its parts animate, or nothing does), and a webgl chunk that failed shows it as is.
+    // One waiting for a trigger or a sequence keeps its class and plays its entrance later.
+    const released = (element) =>
+        (!element.classList.contains('agl') || (element.plane && element.plane.failed)) && getComputedStyle(element).visibility !== 'hidden';
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(({ target, isIntersecting }) => {
+            const state = elements.get(target);
+            if (!state) return;
+            clearInterval(state.poll);
+            if (!isIntersecting) return;
+            if (!state.entrance) return begin(target);
+            // An entrance tells when it starts. Without one any more, start once the element is shown.
+            state.poll = setInterval(() => state.waiting || !released(target) || begin(target), 500);
+        });
+    });
+    return (element) => {
+        const own = (event) => event.target === element;
+        const state = { entrance: element.classList.contains('agl') && !element.classList.contains('agl-in-none') };
+        elements.set(element, state);
+        element.addEventListener('agl-animation-start', (event) => {
+            if (!own(event)) return;
+            const plane = element.plane;
+            if (plane && plane.isCSSAnimation) begin(element);
+            else state.waiting = true;
+        });
+        element.addEventListener('agl-animation-end', (event) => own(event) && begin(element));
+        observer.observe(element);
+    };
+}
+
+;// CONCATENATED MODULE: ./js/count.js
+// Count-up numbers, as a class: the numbers in the text of an element with agl-count count up from 0, once per page
+// view, when it comes into view (textStart.js). With an entrance they count as a CSS entrance starts, or after a WebGL
+// one ends (its snapshot shows them at 0). Each number ends as it was written, with its thousands separators and
+// decimals: 1,250, 98.6%, 4.000 or 1.200,50 (a plain space separates two numbers). Under reduced motion they stay as
+// they are.
+
+
+const duration = 2000;
+// Digits, then groups of three after a separator (, . ' or a non-breaking space), then decimals
+const pattern = /\d+(?:[,.'\u00a0\u202f]\d{3}(?!\d))*(?:[.,]\d+)?/g;
+
+// How a number is written, to write it again at any value
+function parse(text) {
+    const separators = text.replace(/\d/g, '');
+    const last = separators.slice(-1);
+    // The last separator is the decimal point unless three digits follow it and it's the same as the first
+    const decimals = last ? text.length - 1 - text.lastIndexOf(last) : 0;
+    const point = last && (decimals !== 3 || separators[0] !== last) ? last : '';
+    const whole = point ? text.slice(0, text.lastIndexOf(point)) : text;
+    return {
+        text,
+        value: parseFloat(whole.replace(/\D/g, '') + (point ? '.' + text.slice(whole.length + 1) : '')),
+        separator: (/\D/.exec(whole) || [''])[0],
+        point,
+        decimals: point ? decimals : 0,
+    };
+}
+
+function format(number, value) {
+    const [whole, fraction] = value.toFixed(number.decimals).split('.');
+    const grouped = number.separator ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, number.separator) : whole;
+    return fraction ? grouped + number.point + fraction : grouped;
+}
+
+// The text nodes of the element, with the numbers in each
+function textNodes(element) {
+    const nodes = [];
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) if (/\d/.test(walker.currentNode.data)) nodes.push(walker.currentNode);
+    return nodes;
+}
+
+// Writes each number in the element at its value times amount (0 to 1), in the order they were found. The text nodes
+// are looked up each time, so the numbers are found again after something rewrote the element (Pro's text split).
+function write(element, numbers, amount) {
+    let i = 0;
+    textNodes(element).forEach((node) => {
+        const data = node.data.replace(pattern, (text) => {
+            const number = numbers[i++];
+            if (!number) return text;
+            return amount >= 1 ? number.text : format(number, number.value * amount);
+        });
+        if (data !== node.data) node.data = data;
+    });
+}
+
+function setUpCount() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const elements = new Map();
+    const add = whenTextStarts((element) => {
+        const numbers = elements.get(element);
+        // From the first frame's time: performance.now() can be later than it, which made t negative
+        let start = 0;
+        const step = (now) => {
+            if (!start) start = now;
+            // Being edited (a page builder's inline editing): the numbers as written at once, so they're saved as such
+            const editing = element.isContentEditable || element.querySelector('[contenteditable="true"]');
+            const t = editing ? 1 : Math.max(0, Math.min(1, (now - start) / duration));
+            write(element, numbers, 1 - Math.pow(1 - t, 4));
+            if (t < 1) return window.requestAnimationFrame(step);
+            elements.delete(element);
+            element.dispatchEvent(new CustomEvent('agl-count-end', { bubbles: true }));
+        };
+        window.requestAnimationFrame(step);
+    });
+    const register = (element) => {
+        if (element.aglCount) return;
+        const numbers = [];
+        textNodes(element).forEach((node) => node.data.replace(pattern, (text) => numbers.push(parse(text))));
+        if (!numbers.length) return;
+        element.aglCount = true;
+        elements.set(element, numbers);
+        write(element, numbers, 0);
+        add(element);
+    };
+    const scan = () => document.querySelectorAll('.agl-count').forEach(register);
+    scan();
+    // Elements added after load
+    window.addEventListener('agl-init', scan);
+}
+
+;// CONCATENATED MODULE: ./js/typewriter.js
+
+
+// The typewriter, as a class: the text of an element with agl-typewriter is typed out, a character at a time behind a
+// caret, once per page view, when it comes into view (textStart.js). With an entrance it types as a CSS entrance
+// starts, or after a WebGL one ends (its snapshot shows the element without its text). Until a character is typed it
+// is in its place with opacity 0, so nothing moves and screen readers read the whole text. It ends as it was written,
+// links and formatting kept. Under reduced motion the text is shown as written.
+const perCharacter = 50;
+// Long texts type faster, to end in this time
+const longest = 3000;
+
+// The places to stop at in a text: after each character, and once after a run of spaces (the page shows one)
+function stops(text) {
+    const list = [];
+    for (let i = 1; i <= text.length; i++) {
+        if (!/\s/.test(text[i - 1]) || i === text.length || !/\s/.test(text[i])) list.push(i);
+    }
+    return list;
+}
+
+function setUpTypewriter() {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const elements = new Map();
+    const editing = (element) => element.isContentEditable || element.querySelector('[contenteditable="true"]');
+
+    // Each text node keeps its place, empty until typed, with what's left of its text after it in a span
+    const prepare = (element) => {
+        const parts = [];
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        while (walker.nextNode()) if (walker.currentNode.data.trim()) parts.push({ node: walker.currentNode });
+        parts.forEach((part) => {
+            part.text = part.node.data;
+            part.stops = stops(part.text);
+            part.rest = document.createElement('span');
+            part.rest.className = 'agl-typewriter-rest';
+            part.rest.textContent = part.text;
+            part.node.data = '';
+            part.node.parentNode.insertBefore(part.rest, part.node.nextSibling);
+        });
+        return parts;
+    };
+
+    const finish = (element, parts, caret) => {
+        parts.forEach((part) => {
+            part.node.data = part.text;
+            part.rest.remove();
+        });
+        caret.remove();
+        elements.delete(element);
+        element.dispatchEvent(new CustomEvent('agl-typewriter-end', { bubbles: true }));
+    };
+
+    const add = whenTextStarts((element) => {
+        const parts = elements.get(element);
+        const caret = document.createElement('span');
+        caret.className = 'agl-typewriter-caret';
+        caret.setAttribute('aria-hidden', 'true');
+        const total = parts.reduce((sum, part) => sum + part.stops.length, 0);
+        const step = Math.min(perCharacter, longest / total);
+        let start = 0;
+        let typed = -1;
+        const frame = (now) => {
+            if (!start) start = now;
+            // Being edited (a page builder's inline editing): all of it at once, so it's saved as written
+            const count = editing(element) ? total : Math.min(total, Math.floor((now - start) / step) + 1);
+            if (count >= total) return finish(element, parts, caret);
+            if (count !== typed) {
+                typed = count;
+                let left = count;
+                // The caret after the last character typed, or before the first one at the start
+                let current = parts[0];
+                parts.forEach((part) => {
+                    const n = Math.max(0, Math.min(part.stops.length, left));
+                    const at = n ? part.stops[n - 1] : 0;
+                    left -= part.stops.length;
+                    if (n) current = part;
+                    if (part.node.data.length !== at) {
+                        part.node.data = part.text.slice(0, at);
+                        part.rest.textContent = part.text.slice(at);
+                    }
+                });
+                if (caret.nextSibling !== current.rest) current.rest.parentNode.insertBefore(caret, current.rest);
+            }
+            window.requestAnimationFrame(frame);
+        };
+        window.requestAnimationFrame(frame);
+    });
+
+    const register = (element) => {
+        // Not with count-up numbers on the same element, which write into the same text
+        if (element.aglTypewriter || editing(element) || element.classList.contains('agl-count')) return;
+        const parts = prepare(element);
+        if (!parts.length) return;
+        element.aglTypewriter = true;
+        elements.set(element, parts);
+        add(element);
+    };
+    const scan = () => document.querySelectorAll('.agl-typewriter').forEach(register);
+    scan();
+    // Elements added after load
+    window.addEventListener('agl-init', scan);
+}
+
 ;// CONCATENATED MODULE: ./js/main.js
+
+
 
 
 
@@ -3664,6 +3932,13 @@ class Animations {
             cssEffectsStarted = true;
             setUpCssEffects();
         }
+        // Count-up numbers (count.js) and the typewriter (typewriter.js), before the elements are set up so a WebGL
+        // entrance's snapshot shows the numbers at 0 and no typed text
+        if (!textEffectsStarted) {
+            textEffectsStarted = true;
+            setUpCount();
+            setUpTypewriter();
+        }
 
         const layers = [];
 
@@ -3680,7 +3955,7 @@ class Animations {
         let width = document.documentElement.clientWidth;
         let height = viewportSizeDiv.clientHeight;
 
-        const imageLayer = new Layer(this.options, '.agl', 999, width, height);
+        const imageLayer = new Layer(this.options, '.agl', canvasZIndex(this.options), width, height);
         layers.push(imageLayer);
         // A preset added after elements that name it were set up (a pack that loads late): set them up again
         if (this.options.in.presets === entranceDefaults().presets) watchPresets((names) => imageLayer.presetsAdded(names));
@@ -3785,7 +4060,7 @@ class Animations {
 
         function onScroll() {
             layers.forEach(function (layer) {
-                layer.onScroll(window.scrollX, window.scrollY);
+                layer.scrolled();
             });
         }
 
@@ -3816,7 +4091,12 @@ Animations.reset = function (element) {
 // when it stops. effect.init(plane), if given, runs before the first frame; effect.render(plane, velocity) runs on
 // each frame while scrolling, and once more with velocity 0 when scrolling stops, to reset what it changed.
 // velocity is the eased scroll lag in thousands of pixels, positive when scrolling down, eased in from 0 each time
-// the effect starts. init() runs again after a class change picks another effect.
+// the effect starts. init() runs again after a class change picks another effect. An effect tied to where the
+// element is on the screen has holds(plane), which says whether it changes the element there: it then runs while
+// that's true, also at rest, instead of while the page scrolls, and its last render() (with reset true, the third
+// argument) puts the element back. plane.scrollLag is the eased scroll's lag behind the page's (thousands of pixels,
+// before velocity's own easing): adding scrollLag * 1000 to the element's top eases its place as the scroll does, so
+// a wheel's steps don't jump. effect.tiles(plane) gives it the tile mesh (WebGLPlane.meshGeometry()).
 // Effects are WebGL: registering one loads nothing, an element that uses one loads the webgl chunk (webglLoader.js),
 // so Pro can register its effects before the chunk is there and they're used once it is.
 Animations.effects = {};
@@ -3828,7 +4108,9 @@ Animations.registerEffect = function (name, effect) {
 // here as effect.shader (the same fields as the scroll and hover effects' shaders, AnimatedPlane.shaderSource()),
 // next to what the preset's other options do. The chunk reads the entrance's progress (declare
 // uniform mediump float progress; in its head, the vertex shader's precision), 0 to 1, past 1 with an easing that overshoots. Without the effect
-// registered, the preset plays as its other options say. The webgl chunk registers the core's (glitch, webgl.js).
+// registered, the preset plays as its other options say. effect.load(plane), if given, returns a promise the entrance
+// waits for, with the element's own image (an image of its own, which it hands to its uniforms). The webgl chunk
+// registers the core's (glitch, webgl.js).
 Animations.entranceEffects = {};
 Animations.registerEntranceEffect = function (name, effect) {
     Animations.entranceEffects[name] = effect;
@@ -3848,6 +4130,7 @@ Animations.hoverEffects = {};
 // itself sets this to false before the runtime starts (AnimateGL Pro does)
 Animations.cssEffects = true;
 let cssEffectsStarted = false;
+let textEffectsStarted = false;
 Animations.touchHover = false;
 Animations.registerHoverEffect = function (name, effect) {
     Animations.hoverEffects[name] = effect;
@@ -3884,11 +4167,25 @@ Animations.ready = function () {
 
 window.AnimateGL = Animations;
 
+// The canvas's z-index: the --agl-canvas-z-index custom property on the html element, or the zIndex option
+function canvasZIndex(options) {
+    let value = NaN;
+    try {
+        value = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--agl-canvas-z-index'), 10);
+    } catch (e) {}
+    if (!Number.isFinite(value)) value = parseInt(options.zIndex, 10);
+    return Number.isFinite(value) ? value : 999;
+}
+
 const defaults = {
     rootFolder: '../',
     // The webgl chunk's full URL, when it isn't next to this bundle (js/webglLoader.js). The WordPress plugin sets it.
     webglSrc: '',
     html2canvasSrc: 'js/lib/html2canvas-pro.min.js',
+    // The shared WebGL canvas's z-index. It draws the elements while they animate or are hovered, so it has to be
+    // above their ancestors' backgrounds, and anything fixed or sticky that should stay above them (a header, a
+    // banner) needs a higher z-index. The --agl-canvas-z-index custom property on the html element overrides it.
+    zIndex: 999,
 
     in: {
         name: '',
@@ -3899,6 +4196,13 @@ const defaults = {
         delay: 0,
         distance: 1,
         scale: 1,
+        // CSS entrances only: a blur in px, a skew in degrees and the transform's origin while it plays
+        blur: 0,
+        skew: {
+            x: 0,
+            y: 0,
+        },
+        origin: '',
         type: 'webgl',
         angle: 0,
         lockToScrollbar: false, // animation progress depends on the element position in viewport, if element is inside scrollable area
@@ -4107,6 +4411,61 @@ const defaults = {
             slideCSSRight: { clipPath: ['inset(0% 0% 0% 100%)', 'inset(0% 0% 0% 0%)'], translate: { x: '-100%' } },
             slideCSSUp: { clipPath: ['inset(0% 0% 100% 0%)', 'inset(0% 0% 0% 0%)'], translate: { y: '100%' } },
             slideCSSDown: { clipPath: ['inset(100% 0% 0% 0%)', 'inset(0% 0% 0% 0%)'], translate: { y: '-100%' } },
+
+            blurCSS: { blur: 20 },
+            blurCSSLeft: { blur: 20, translate: { x: '50px' } },
+            blurCSSRight: { blur: 20, translate: { x: '-50px' } },
+            blurCSSUp: { blur: 20, translate: { y: '50px' } },
+            blurCSSDown: { blur: 20, translate: { y: '-50px' } },
+
+            // Sharpens as it settles from a little larger
+            focusCSS: { blur: 12, scale: 1.15 },
+            focusCSSLeft: { blur: 12, scale: 1.15, translate: { x: '50px' } },
+            focusCSSRight: { blur: 12, scale: 1.15, translate: { x: '-50px' } },
+            focusCSSUp: { blur: 12, scale: 1.15, translate: { y: '50px' } },
+            focusCSSDown: { blur: 12, scale: 1.15, translate: { y: '-50px' } },
+
+            // Turns in from edge on, around its middle
+            flipCSS: { rotate: { y: 90 } },
+            flipCSSLeft: { rotate: { y: 90 } },
+            flipCSSRight: { rotate: { y: -90 } },
+            flipCSSUp: { rotate: { x: -90 } },
+            flipCSSDown: { rotate: { x: 90 } },
+
+            // Swings out of the page on a hinge at one edge, like a card unfolding
+            foldCSS: { rotate: { x: -90 }, origin: '50% 0%' },
+            foldCSSLeft: { rotate: { y: -90 }, origin: '100% 50%' },
+            foldCSSRight: { rotate: { y: 90 }, origin: '0% 50%' },
+            foldCSSUp: { rotate: { x: 90 }, origin: '50% 100%' },
+            foldCSSDown: { rotate: { x: -90 }, origin: '50% 0%' },
+
+            // A spiral in, a turn either way, or a swing on a bottom or top corner
+            rotateCSS: { rotate: { z: -180 }, scale: 0.5 },
+            rotateCSSLeft: { rotate: { z: 90 } },
+            rotateCSSRight: { rotate: { z: -90 } },
+            rotateCSSUp: { rotate: { z: 45 }, origin: '0% 100%' },
+            rotateCSSDown: { rotate: { z: -45 }, origin: '0% 0%' },
+
+            // Rolls in from the side it moves away from
+            rollCSS: { translate: { x: -1 }, rotate: { z: -120 } },
+            rollCSSLeft: { translate: { x: 1 }, rotate: { z: 120 } },
+            rollCSSRight: { translate: { x: -1 }, rotate: { z: -120 } },
+            rollCSSUp: { translate: { y: 1 }, rotate: { z: 120 } },
+            rollCSSDown: { translate: { y: -1 }, rotate: { z: -120 } },
+
+            // Slides in leaning back, and straightens as it stops (a "light speed" entrance)
+            skewCSS: { translate: { x: 0.5 }, skew: { x: -30 } },
+            skewCSSLeft: { translate: { x: 0.5 }, skew: { x: -30 } },
+            skewCSSRight: { translate: { x: -0.5 }, skew: { x: 30 } },
+            skewCSSUp: { translate: { y: 0.5 }, skew: { y: 10 } },
+            skewCSSDown: { translate: { y: -0.5 }, skew: { y: -10 } },
+
+            // Grows past its size and settles back: easeOutBack, unless the element picks another easing
+            popCSS: { scale: 0.5, easing: 'easeOutBack' },
+            popCSSLeft: { scale: 0.5, easing: 'easeOutBack', translate: { x: '25%' } },
+            popCSSRight: { scale: 0.5, easing: 'easeOutBack', translate: { x: '-25%' } },
+            popCSSUp: { scale: 0.5, easing: 'easeOutBack', translate: { y: '25%' } },
+            popCSSDown: { scale: 0.5, easing: 'easeOutBack', translate: { y: '-25%' } },
         },
 
         names: [
@@ -4115,6 +4474,14 @@ const defaults = {
             { name: 'zoomOutCSS', title: 'Zoom Out' },
             { name: 'wipeCSS', title: 'Wipe' },
             { name: 'slideCSS', title: 'Slide' },
+            { name: 'blurCSS', title: 'Blur' },
+            { name: 'focusCSS', title: 'Focus' },
+            { name: 'flipCSS', title: 'Flip' },
+            { name: 'foldCSS', title: 'Fold' },
+            { name: 'rotateCSS', title: 'Rotate' },
+            { name: 'rollCSS', title: 'Roll' },
+            { name: 'skewCSS', title: 'Skew' },
+            { name: 'popCSS', title: 'Pop' },
             { name: 'fade', title: 'Fade' },
             { name: 'flip', title: 'Flip' },
             { name: 'slide', title: 'Slide' },

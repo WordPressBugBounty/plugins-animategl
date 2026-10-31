@@ -79,3 +79,22 @@
 .lil-gui .btn-reset button {
 	background-color: #555;
 }
+/* Count-up numbers: digits of one width, so the text doesn't shift while they count */
+.agl-count {
+	font-variant-numeric: tabular-nums;
+}
+/* The typewriter: text not typed yet keeps its place, and the caret takes none */
+.agl-typewriter-rest {
+	opacity: 0;
+}
+.agl-typewriter-caret {
+	position: relative;
+}
+.agl-typewriter-caret::after {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: -0.04em;
+	border-left: 0.08em solid currentColor;
+}

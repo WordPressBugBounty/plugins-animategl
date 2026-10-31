@@ -1,10 +1,10 @@
 <?php
 
 /*
-Plugin Name: AnimateGL – WebGL & CSS Scroll and Hover Animations for Gutenberg and Elementor
+Plugin Name: AnimateGL – WebGL & CSS Scroll Animations and Hover Effects for Gutenberg and Elementor
 Plugin URI: https://animategl.com/
 Description: Scroll and entrance animations for Gutenberg blocks, Elementor and any element via CSS classes. CSS animations plus WebGL effects.
-Version: 1.6.0
+Version: 1.7.0
 Requires at least: 6.6
 Requires PHP: 7.4
 Author: creativeinteractivemedia
@@ -25,7 +25,7 @@ if (defined('ANIMATE_GL_VERSION')) {
 	return;
 }
 
-define('ANIMATE_GL_VERSION', '1.6.0');
+define('ANIMATE_GL_VERSION', '1.7.0');
 define('ANIMATE_GL_FILE', __FILE__);
 
 if (! function_exists('animategl_fs')) {

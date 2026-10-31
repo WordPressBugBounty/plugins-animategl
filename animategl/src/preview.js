@@ -124,6 +124,10 @@ ${ scripts }
 	// Counted by the editor to tell when the preview has finished
 	window.aglPreviewEnded = 0;
 	document.addEventListener('agl-animation-end', function () { window.aglPreviewEnded++; });
+	window.aglPreviewCounted = 0;
+	document.addEventListener('agl-count-end', function () { window.aglPreviewCounted++; });
+	window.aglPreviewTyped = 0;
+	document.addEventListener('agl-typewriter-end', function () { window.aglPreviewTyped++; });
 	var options = ${ json( savedSettings() ) };
 	options.rootFolder = ${ json( url ) };
 	if (options.in) {
@@ -142,7 +146,8 @@ ${ scripts }
 	canvasDoc.head.appendChild( hide );
 	document.body.appendChild( overlay );
 
-	// Done when every animated element in the overlay has fired agl-animation-end, or after a time limit.
+	// Done when every animated element in the overlay has fired agl-animation-end (and its numbers have counted
+	// up, its text has been typed), or after a time limit.
 	// That's the copy, or, when a runtime extension handed its animation to parts of it (Pro's stagger and
 	// text split), each part. Lock to scrollbar animations never finish here.
 	const started = Date.now();
@@ -151,10 +156,14 @@ ${ scripts }
 	const poll = setInterval( () => {
 		const win = overlay.contentWindow;
 		const el = overlay.contentDocument && overlay.contentDocument.querySelector( '[data-agl-preview]' );
-		const animated = ! el ? 1 : el.classList.contains( 'agl' ) ? 1 : el.querySelectorAll( '.agl' ).length || 1;
+		// Count-up numbers (agl-count) and the typewriter (agl-typewriter) end after the entrance, or on their own
+		const counts = !! ( el && el.aglCount );
+		const types = !! ( el && el.aglTypewriter );
+		const animated = ! el ? 1 : el.classList.contains( 'agl' ) ? 1 : el.querySelectorAll( '.agl' ).length || ( counts || types ? 0 : 1 );
 		const ended = ( win && win.aglPreviewEnded ) || 0;
+		const counted = ( ! counts || ( win && win.aglPreviewCounted ) ) && ( ! types || ( win && win.aglPreviewTyped ) );
 		const elapsed = Date.now() - started;
-		if ( ( ended >= animated && elapsed >= minimum ) || elapsed > limit ) {
+		if ( ( ended >= animated && counted && elapsed >= minimum ) || elapsed > limit ) {
 			clearInterval( poll );
 			setTimeout( stopPreview, 400 );
 		}

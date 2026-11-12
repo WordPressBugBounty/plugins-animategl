@@ -107,8 +107,8 @@ var easings = __webpack_require__(314);
 // Each element gets the first of its entries in a batch, as with an observer of its own.
 const viewportObserver = { options: { threshold: [0, 0.7] } };
 const entranceObserver = { options: { rootMargin: '-200px 0px -200px 0px' } };
-// A screen above and below the viewport: elements drawn with html2canvas take their snapshot there, ahead of their
-// entrance (WebGLPlane.prefetchSnapshot())
+// A screen above and below the viewport: elements drawn with WebGL get their texture ready there, ahead of their
+// entrance: an image's file (WebGLPlane.prefetchTexture()), anything else's html2canvas snapshot (prefetchSnapshot())
 const snapshotObserver = { options: { rootMargin: '100% 0px 100% 0px' } };
 
 function observeViewport(shared, element, callback) {
@@ -136,6 +136,20 @@ function unobserveViewport(shared, element) {
     shared.callbacks.delete(element);
 }
 
+// A deep copy of the entrance options, or of all the options, without the preset registry (in.presets, in.names).
+// Each element used to copy the registry, more than a hundred presets, four times while it was set up: most of the
+// runtime's start-up time on a page with many elements. initOptions() reads the presets from the registry itself.
+function copyEntrance(entrance) {
+    const { presets, names, ...own } = entrance || {};
+    return JSON.parse(JSON.stringify(own));
+}
+
+function copyOptions(options) {
+    const copy = JSON.parse(JSON.stringify({ ...options, in: undefined }));
+    copy.in = copyEntrance(options.in);
+    return copy;
+}
+
 // One animated element (.agl). This core class runs CSS entrances and everything that isn't drawing: options from
 // the classes, the viewport observers, play()/reset(), events and the effects' lifecycle. Drawing with WebGL (OGL,
 // the shaders, html2canvas) is in WebGLPlane.js, in the webgl chunk (animategl.webgl.min.js): the core loads it
@@ -148,7 +162,7 @@ class AnimatedPlane {
         this.index = index;
         this.viewportWidth = width;
         this.viewportHeight = height;
-        this.originalOptions = JSON.parse(JSON.stringify(options));
+        this.originalOptions = copyOptions(options);
         this.dataURL = false;
         this.initialState = true;
 
@@ -302,12 +316,13 @@ class AnimatedPlane {
             }
         });
 
-        // A snapshot taken on entering the view is a long task as the entrance starts: taken a screen before instead
-        if (this.htmlToCanvas) {
-            observeViewport(snapshotObserver, domElement, (entry) => {
-                if (entry.isIntersecting) self.prefetchSnapshot();
-            });
-        }
+        // A snapshot taken on entering the view is a long task as the entrance starts: taken a screen before instead.
+        // An image's texture is loaded there too. Both do nothing for an element that isn't drawn with WebGL.
+        observeViewport(snapshotObserver, domElement, (entry) => {
+            if (!entry.isIntersecting) return;
+            if (self.isImage) self.prefetchTexture();
+            else self.prefetchSnapshot();
+        });
 
         this.childObserver = new MutationObserver(function (mutations) {
             // console.log(mutations)
@@ -343,12 +358,13 @@ class AnimatedPlane {
         this.srcObserver = new MutationObserver((changes) => {
             changes.forEach((change) => {
                 if (change.attributeName.includes('src')) {
+                    // Drawn by WebGL only: an element that isn't loads nothing here
+                    if (!self.texture) return;
                     // console.dir(domElement.src);
                     const img = new Image();
                     img.crossOrigin = 'anonymous';
                     img.src = domElement.src;
                     img.onload = function () {
-                        // Drawn by WebGL only
                         if (!self.texture) return;
                         self.texture.image = self.imageTexture(img);
                         self.program.uniforms.tScale.value = self.getTextureScale();
@@ -397,14 +413,19 @@ class AnimatedPlane {
             }
         }
 
-        if (domElement.nodeName == 'IMG') {
-            // The file the browser picked from srcset, so the texture is the image on the page
-            this.textureImg.src = domElement.currentSrc || domElement.src;
-            this.isImage = true;
-            // this.textureImg = domElement
-        } else {
-            this.htmlToCanvas = true;
+        // An image is its own texture, anything else is drawn by html2canvas. The image's file isn't loaded here: only
+        // when the element is about to be drawn with WebGL (WebGLPlane.textureFromImage()). Loaded here for every
+        // animated image, CSS entrances too, it downloaded lazy images far down the page as the page started, and
+        // from src where the browser later picked another file from srcset, so twice.
+        const isImage = domElement.nodeName == 'IMG';
+        // Another element than before (children were added): its texture is made again from what it is now
+        if (this.domElement && this.domElement !== domElement) {
+            this.textureImg = new Image();
+            this.textureImg.crossOrigin = 'anonymous';
+            this.textureUrl = '';
         }
+        this.isImage = isImage;
+        this.htmlToCanvas = !isImage;
 
         // attrChangeObserver causes choppy CSS animations because it triggers functions on each transform change
 
@@ -423,7 +444,7 @@ class AnimatedPlane {
 
     initOptions() {
         //make deep copy of passed options object
-        this.options = JSON.parse(JSON.stringify(this.originalOptions));
+        this.options = copyOptions(this.originalOptions);
 
         this.stopEffects();
         this.scrollEffect = this.findEffect('effects', 'scroll');
@@ -438,7 +459,8 @@ class AnimatedPlane {
 
         const className = this.originalDomElement.className;
 
-        const presets = this.options.in.presets;
+        // The registry itself (compat.js), or the presets the page passed: not a copy made when the element was set up
+        const presets = (this.layer.options.in && this.layer.options.in.presets) || {};
 
         // if animation is defined with classes, don't use options for translate, rotate, fade
         // if (className.includes("agl-in-fade") || className.includes("agl-in-translate") || className.includes("agl-in-rotate")) {
@@ -454,17 +476,16 @@ class AnimatedPlane {
         this.isCSSAnimation = this.options.in.type == 'css';
 
         this.originalDomElement.classList.forEach((name) => {
-            for (const key in presets) {
-                if (name == `agl-${key}`) {
-                    // take defaults and extend with presets
-                    this.options.in = JSON.parse(JSON.stringify(agl.defaults.in));
-                    this.options.in = (0,functions/* extend */.l7)({}, this.options.in, presets[key]);
-                    this.options.in.name = key;
-                    this.options.in.nameFromCSSClass = key;
+            // agl-<preset>: looked up by name, not by going through every preset for every class
+            const key = name.startsWith('agl-') ? name.slice(4) : '';
+            if (key && Object.prototype.hasOwnProperty.call(presets, key)) {
+                // take defaults and extend with presets
+                this.options.in = (0,functions/* extend */.l7)(copyEntrance(agl.defaults.in), presets[key]);
+                this.options.in.name = key;
+                this.options.in.nameFromCSSClass = key;
 
-                    // Built-in CSS presets have CSS in their name; presets added by others can say their type
-                    this.isCSSAnimation = presets[key].type ? presets[key].type === 'css' : name.includes('CSS');
-                }
+                // Built-in CSS presets have CSS in their name; presets added by others can say their type
+                this.isCSSAnimation = presets[key].type ? presets[key].type === 'css' : name.includes('CSS');
             }
 
             this.getOptionsFromClassName(name, this.options.in);
@@ -864,7 +885,7 @@ class AnimatedPlane {
     presetsAdded(names) {
         const name = names.find((added) => this.originalDomElement.classList.contains(`agl-${added}`));
         if (!name || this.options.in.nameFromCSSClass === name) return;
-        this.originalOptions = JSON.parse(JSON.stringify(this.layer.options));
+        this.originalOptions = copyOptions(this.layer.options);
         this.optionsChanged();
     }
 
@@ -1578,6 +1599,8 @@ class AnimatedPlane {
     releaseGL() {}
 
     prefetchSnapshot() {}
+
+    prefetchTexture() {}
 }
 
 
@@ -3534,6 +3557,7 @@ function extendOptions(out, ...sources) {
 // false before the runtime starts. The strengths are those of strengths.json.
 const strengths = { lift: 6, grow: 0.04, tilt: 20, skew: { strength: 0.02, max: 5 } };
 const hoverEffects = ['lift', 'grow', 'tilt'];
+const hoverEffect = (element) => hoverEffects.find((name) => element.classList.contains(`agl-hover-${name}`));
 
 function setUpCssEffects() {
     const reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -3567,13 +3591,17 @@ function setUpCssEffects() {
         element.addEventListener('agl-animation-start', (event) => own(event) && remove(element));
         element.addEventListener('agl-animation-cancel', (event) => own(event) && remove(element));
         element.addEventListener('agl-animation-end', (event) => own(event) && add(element));
-        if (!element.classList.contains('agl') || element.classList.contains('agl-in-none')) add(element);
-        const effect = canHover && hoverEffects.find((name) => element.classList.contains(`agl-hover-${name}`));
-        if (!effect) return;
-        const state = { effect, target: 0, amount: 0, x: 0.5, y: 0.5 };
+        // Without an entrance (no agl class, or agl-in-none), or with one that has played already (an effect class
+        // added later, as the Bricks canvas does), it may move now
+        const plane = element.plane;
+        if (!element.classList.contains('agl') || element.classList.contains('agl-in-none') || (plane && plane.animatedIn && !plane.entranceAnimamtionPlaying)) add(element);
+        if (!canHover) return;
+        // The effect is read from the classes as it moves, so one changed or taken off later (in a page builder's
+        // canvas) changes with them
+        const state = { target: 0, amount: 0, x: 0.5, y: 0.5 };
         hover.set(element, state);
         const pointer = (event) => {
-            if (event.pointerType !== 'mouse') return;
+            if (event.pointerType !== 'mouse' || !hoverEffect(element)) return;
             const rect = element.getBoundingClientRect();
             state.target = event.type === 'pointerleave' ? 0 : 1;
             if (state.target && rect.width && rect.height) {
@@ -3607,7 +3635,7 @@ function setUpCssEffects() {
                 state.amount = 0;
                 return;
             }
-            const goal = state.target;
+            const goal = hoverEffect(element) ? state.target : 0;
             state.amount += (goal - state.amount) * 0.15;
             if (Math.abs(goal - state.amount) < 0.005) state.amount = goal;
             else moving = true;
@@ -3616,8 +3644,9 @@ function setUpCssEffects() {
             const { inline, computed } = entry;
             const moves = [];
             const state = hover.get(element);
-            if (state && state.amount) {
-                const { effect, amount, x, y } = state;
+            const effect = state && hoverEffect(element);
+            if (effect && state.amount) {
+                const { amount, x, y } = state;
                 const strength = strengths[effect] * amount;
                 if (effect === 'tilt') moves.push(`perspective(800px) rotateX(${((0.5 - y) * strength).toFixed(2)}deg) rotateY(${((x - 0.5) * strength).toFixed(2)}deg)`);
                 if (effect === 'grow') moves.push(`scale(${(1 + strength).toFixed(4)})`);

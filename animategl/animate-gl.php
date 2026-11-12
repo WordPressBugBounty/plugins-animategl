@@ -4,7 +4,7 @@
 Plugin Name: AnimateGL – WebGL & CSS Scroll Animations and Hover Effects for Gutenberg and Elementor
 Plugin URI: https://animategl.com/
 Description: Scroll and entrance animations for Gutenberg blocks, Elementor and any element via CSS classes. CSS animations plus WebGL effects.
-Version: 1.7.0
+Version: 1.8.0
 Requires at least: 6.6
 Requires PHP: 7.4
 Author: creativeinteractivemedia
@@ -25,7 +25,7 @@ if (defined('ANIMATE_GL_VERSION')) {
 	return;
 }
 
-define('ANIMATE_GL_VERSION', '1.7.0');
+define('ANIMATE_GL_VERSION', '1.8.0');
 define('ANIMATE_GL_FILE', __FILE__);
 
 if (! function_exists('animategl_fs')) {
@@ -49,8 +49,17 @@ if (! function_exists('animategl_fs')) {
 					'slug'           => 'agl_admin',
 					'account'        => false,
 					'contact'        => false,
+					// The opt-in shows only at its own URL (connect_url below), so the AnimateGL page opens on Home
+					'override_exact' => true,
 				),
 			));
+			// The opt-in's URL: the AnimateGL page with agl_optin=1, linked from Freemius's notice and the Plugins
+			// screen's Opt In link
+			$animategl_fs->add_filter('connect_url', function ($url) {
+				return add_query_arg('agl_optin', '1', $url);
+			});
+			// Activating opens AnimateGL's Home (animategl_activation_redirect() below), not the opt-in
+			$animategl_fs->add_filter('redirect_on_activation', '__return_false');
 		}
 
 		return $animategl_fs;
@@ -65,3 +74,21 @@ if (! function_exists('animategl_fs')) {
 include_once(plugin_dir_path(ANIMATE_GL_FILE) . '/includes/main.php');
 
 $animate_gl = AnimateGL::get_instance();
+
+// After activating, open AnimateGL's Home (not on bulk or network activation, WP-CLI or a request without a page)
+register_activation_hook(__FILE__, function () {
+	set_transient('animategl_activation_redirect', 1, 60);
+});
+add_action('admin_init', 'animategl_activation_redirect');
+function animategl_activation_redirect()
+{
+	if (!get_transient('animategl_activation_redirect')) {
+		return;
+	}
+	delete_transient('animategl_activation_redirect');
+	if (wp_doing_ajax() || is_network_admin() || isset($_GET['activate-multi']) || !current_user_can(AnimateGL::capability())) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- only read
+		return;
+	}
+	wp_safe_redirect(admin_url('admin.php?page=agl_admin'));
+	exit;
+}

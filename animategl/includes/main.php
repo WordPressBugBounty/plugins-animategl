@@ -14,6 +14,9 @@ class AnimateGL
 	public $plugin_dir_url;
 	public $ajaxurl;
 
+	// Whether this page loads the runtime (enqueue_runtime())
+	private $runtime_queued = false;
+
 	// Singleton
 	private static $instance = null;
 
@@ -68,9 +71,33 @@ class AnimateGL
 		include_once($this->plugin_dir_path . 'includes/settings.php');
 		new AnimateGL_Settings();
 
+		// The site intro, a CSS reveal of the whole page as it loads (a row in the Settings tab)
+		include_once($this->plugin_dir_path . 'includes/intro.php');
+		new AnimateGL_Intro();
+
+		// For AI tools: the reference of every animation, and abilities that use it (WordPress 6.9 and later)
+		include_once($this->plugin_dir_path . 'includes/reference.php');
+		if (function_exists('wp_register_ability')) {
+			include_once($this->plugin_dir_path . 'includes/abilities.php');
+			new AnimateGL_Abilities();
+		}
+
+		// The Home tab's "Create a sample page" button
+		if (is_admin()) {
+			include_once($this->plugin_dir_path . 'includes/sample.php');
+			new AnimateGL_Sample();
+		}
+
 
 
 		add_action('wp_enqueue_scripts', array($this, 'frontend_assets'));
+		// The runtime loads only on pages that use AnimateGL: blocks, post content and the page builders' elements
+		// (AnimateGL_Controls::classes()) with its classes enqueue it while the page renders, late enough to see
+		// the classes added on render (dynamic blocks, Pro's site-wide rules). For classes it can't see there (a
+		// theme template, a widget, another builder), the footer looks for them in the page (runtime_fallback()).
+		add_filter('render_block', array($this, 'find_classes'), 999);
+		add_filter('the_content', array($this, 'find_classes'), 999);
+		add_action('wp_footer', array($this, 'runtime_fallback'), 30);
 		add_action('admin_enqueue_scripts', array($this, 'admin_assets'));
 
 	}
@@ -153,8 +180,107 @@ class AnimateGL
 
 		wp_enqueue_style('agl');
 		wp_enqueue_script('agl-head');
+
+		// Return true to load the runtime on every page, as before 1.8.0. A page builder's editing canvas always gets
+		// it: its panel lists the runtime's presets, and elements get their classes after the page has loaded.
+		if (apply_filters('animategl_load_everywhere', false) || self::is_builder_canvas()) {
+			$this->enqueue_runtime();
+		}
+	}
+
+	// True on the page a page builder edits the page in: Elementor's preview, Bricks' canvas, Divi 5's Visual Builder
+	public static function is_builder_canvas()
+	{
+		if (class_exists('\Elementor\Plugin') && isset(\Elementor\Plugin::$instance->preview) && \Elementor\Plugin::$instance->preview->is_preview_mode()) {
+			return true;
+		}
+		if (function_exists('bricks_is_builder_iframe') && bricks_is_builder_iframe()) {
+			return true;
+		}
+		return function_exists('et_core_is_fb_enabled') && et_core_is_fb_enabled();
+	}
+
+	// Loads the runtime on this page. Call it for AnimateGL classes the plugin doesn't add itself, before wp_footer.
+	public function enqueue_runtime()
+	{
+		if ($this->runtime_queued || is_admin() || !apply_filters('animategl_enqueue', true)) {
+			return;
+		}
+		$this->runtime_queued = true;
+		wp_enqueue_style('agl');
+		wp_enqueue_script('agl-head');
 		wp_enqueue_script('agl-embed');
 		wp_add_inline_script('agl-embed', $this->options_script(), 'before');
+	}
+
+	// True when the HTML has an element with an AnimateGL class (agl, or one that starts with agl-)
+	public static function has_classes($html)
+	{
+		return is_string($html) && false !== strpos($html, 'agl') && (bool) preg_match('/\bclass\s*=\s*(["\'])(?:(?!\1).)*?(?<![\w-])agl(?:-[\w-]*)?(?![\w-])/is', $html);
+	}
+
+	// render_block and the_content: load the runtime if the HTML has AnimateGL classes
+	public function find_classes($html)
+	{
+		if (!$this->runtime_queued && self::has_classes($html)) {
+			$this->enqueue_runtime();
+		}
+		return $html;
+	}
+
+	// After the footer's scripts: if the runtime isn't on this page, its script tags (with the scripts that extend
+	// it, Pro's and the packs') go into a template, which the inline script loads in order only if the page turns out
+	// to have an element with an AnimateGL class.
+	public function runtime_fallback()
+	{
+		if ($this->runtime_queued || is_admin() || !wp_script_is('agl-head', 'enqueued')) {
+			return;
+		}
+		wp_add_inline_script('agl-embed', $this->options_script(), 'before');
+		ob_start();
+		wp_scripts()->do_items(array('agl-embed'));
+		$tags = ob_get_clean();
+		if ('' === trim($tags)) {
+			return;
+		}
+		echo '<template id="agl-runtime">' . $tags . '</template>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- script tags printed by WP_Scripts
+		wp_print_inline_script_tag(self::fallback_script());
+	}
+
+	private static function fallback_script()
+	{
+		return "(function (d, w) {\n"
+			. "\tfunction load() {\n"
+			. "\t\tvar t = d.getElementById('agl-runtime');\n"
+			. "\t\tif (!t || !d.body.querySelector('[class~=\"agl\"], [class*=\"agl-\"]')) return;\n"
+			. "\t\tw.aglLoading = true;\n"
+			. "\t\tvar list = Array.prototype.slice.call(t.content.querySelectorAll('script'));\n"
+			. "\t\t(function next() {\n"
+			. "\t\t\tvar old = list.shift();\n"
+			// Done: without the runtime (an optimization plugin rewrote the tags), show the elements as they are
+			. "\t\t\tif (!old) { if (!w.AnimateGL) d.documentElement.classList.remove('agl-js'); return; }\n"
+			// WP Rocket's delayed JS and others keep the URL in data-rocket-src or data-src
+			. "\t\t\tvar src = old.getAttribute('src') || old.getAttribute('data-rocket-src') || old.getAttribute('data-src');\n"
+			. "\t\t\tvar s = d.createElement('script');\n"
+			. "\t\t\tfor (var i = 0; i < old.attributes.length; i++) s.setAttribute(old.attributes[i].name, old.attributes[i].value);\n"
+			// The runtime's scripts are classic scripts: drop a type an optimization plugin set to hold them back
+			. "\t\t\ts.removeAttribute('type');\n"
+			. "\t\t\tif (src) {\n"
+			. "\t\t\t\ts.src = src;\n"
+			. "\t\t\t\ts.async = false;\n"
+			. "\t\t\t\ts.onload = next;\n"
+			. "\t\t\t\ts.onerror = function () { d.documentElement.classList.remove('agl-js'); };\n"
+			. "\t\t\t\td.body.appendChild(s);\n"
+			. "\t\t\t} else {\n"
+			. "\t\t\t\ts.text = old.text;\n"
+			. "\t\t\t\td.body.appendChild(s);\n"
+			. "\t\t\t\tnext();\n"
+			. "\t\t\t}\n"
+			. "\t\t})();\n"
+			. "\t}\n"
+			. "\tif (d.readyState === 'loading') d.addEventListener('DOMContentLoaded', load);\n"
+			. "\telse load();\n"
+			. "})(document, window);";
 	}
 
 	// Our admin page shows animated previews too
@@ -194,7 +320,7 @@ class AnimateGL
 			. "\tvar root = d.documentElement;\n"
 			. "\troot.classList.add('agl-js');\n"
 			. "\td.addEventListener('DOMContentLoaded', function () {\n"
-			. "\t\tsetTimeout(function () { if (!w.AnimateGL) root.classList.remove('agl-js'); }, 1000);\n"
+			. "\t\tsetTimeout(function () { if (!w.AnimateGL && !w.aglLoading) root.classList.remove('agl-js'); }, 1000);\n"
 			. "\t});\n"
 			. "})(document, window);";
 	}
@@ -226,6 +352,7 @@ class AnimateGL
 				'settings' => get_option('agl_json'),
 				// Lite's "More with Pro" row in the panel (src/index.js), empty to leave it out
 				'proUrl'   => apply_filters('animategl_show_upsell', true) ? self::pro_url() : '',
+				'trialUrl' => apply_filters('animategl_show_upsell', true) ? self::trial_url() : '',
 			)) . ';',
 			'before'
 		);
@@ -312,11 +439,17 @@ class AnimateGL
 	// is the PHP side of the animategl.classes JS filter.
 	private function get_block_classes($attrs)
 	{
-		$classes = (array) apply_filters('animategl_block_classes', $this->get_animation_classes($attrs), $attrs);
+		return self::block_classes_for($attrs);
+	}
+
+	// A block's classes from its AnimateGL attributes (includes/abilities.php reads them too)
+	public static function block_classes_for($attrs)
+	{
+		$classes = (array) apply_filters('animategl_block_classes', self::get_animation_classes($attrs), $attrs);
 		return array_values(array_unique(array_filter($classes, 'is_string')));
 	}
 
-	private function get_animation_classes($attrs)
+	private static function get_animation_classes($attrs)
 	{
 		if (!isset($attrs['aglInName']) || !self::is_class_token($attrs['aglInName'])) {
 			return array();
@@ -380,12 +513,20 @@ class AnimateGL
 		return apply_filters('animategl_pro_url', 'https://animategl.com/pro/');
 	}
 
+	// Lite's "Start 7-day free trial" buttons: Freemius's checkout for Pro (product 42139) with its trial, which asks for
+	// a payment method (trial=paid) and offers yearly and lifetime, as animategl.com's trial buttons do. Return an empty
+	// string from the animategl_trial_url filter to leave the buttons out (when the trial is turned off in Freemius).
+	public static function trial_url()
+	{
+		return (string) apply_filters('animategl_trial_url', 'https://checkout.freemius.com/product/42139/?trial=paid&billing_cycle_selector=responsive_list');
+	}
+
 	// Links under the plugin's name on the Plugins screen
 	public function plugin_action_links($links)
 	{
 		$own = array(
 			'settings' => sprintf('<a href="%s">%s</a>', esc_url(admin_url('admin.php?page=agl_admin')), esc_html__('Settings', 'animategl')),
-			'docs' => sprintf('<a href="%s" target="_blank">%s</a>', esc_url('https://creativeinteractivemedia.gitbook.io/animategl-wp/'), esc_html__('Docs', 'animategl')),
+			'docs' => sprintf('<a href="%s" target="_blank">%s</a>', esc_url('https://animategl.com/docs/'), esc_html__('Docs', 'animategl')),
 		);
 		// Return false to hide lite's links and panels that point to AnimateGL Pro (AnimateGL Pro does)
 		if (apply_filters('animategl_show_upsell', true)) {

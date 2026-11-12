@@ -44,9 +44,11 @@
 
 	// Start once the page has loaded, or right away if this script runs later (e.g. delayed by an optimization plugin)
 	// and once the runtime's extensions have the code they start with (AnimateGL.hold())
+	// and, with the site intro on (includes/intro.php), once its reveal is half done, so entrances aren't played under it
 	function start() {
-		if (window.AnimateGL && window.AnimateGL.ready) window.AnimateGL.ready().then(init)
-		else init()
+		const intro = window.aglIntro || Promise.resolve()
+		if (window.AnimateGL && window.AnimateGL.ready) Promise.all([window.AnimateGL.ready(), intro]).then(init)
+		else intro.then(init)
 	}
 	if (document.readyState === 'complete') start()
 	else window.addEventListener('load', start)

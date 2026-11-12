@@ -4,7 +4,7 @@ Tags: animation, scroll animation, hover effects, animate on scroll, gutenberg b
 Requires at least: 6.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.8.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -12,7 +12,7 @@ Scroll animations, hover effects, typewriter text and count-up numbers for Guten
 
 == Description ==
 
-[Live demo](https://animategl.com/ "Live AnimateGL demo") | [Documentation](https://creativeinteractivemedia.gitbook.io/animategl-wp/ "Documentation") | [Support](https://wordpress.org/support/plugin/animategl/ "Support") | [AnimateGL Pro](https://animategl.com/pro/ "AnimateGL Pro")
+[Live demo](https://animategl.com/ "Live AnimateGL demo") | [Documentation](https://animategl.com/docs/ "Documentation") | [Support](https://wordpress.org/support/plugin/animategl/ "Support") | [AnimateGL Pro](https://animategl.com/pro/ "AnimateGL Pro")
 
 **Bring your pages to life with scroll animations and hover effects.** AnimateGL animates headings, text, images, buttons, cards and whole sections as they scroll into view, and moves them when the mouse is over them. Select a Gutenberg block, an Elementor widget, a Bricks element or a Divi module, pick an entrance animation or a hover effect, and publish. No code, and no new page builder to learn.
 
@@ -29,7 +29,9 @@ Most animation plugins stop at fade and slide. AnimateGL has those as fast CSS a
 * **Hover and scroll effects.** Lift, Grow and Tilt an element while the mouse is over it, or Skew it with the scroll speed. Free, on any block or page builder element.
 * **Full control.** Set the direction, distance, duration, delay and easing (23 easings, including elastic, bounce, springs and steps). Play an animation once or every time it enters the viewport, or lock it to the scrollbar.
 * **Preview in the editor.** Click Preview animation in the block editor to see the animation before you publish.
-* **Fast.** The core script is about 19 KB gzipped, has no dependencies and loads deferred. The WebGL renderer loads only on pages that use a WebGL animation.
+* **Fast.** The core script is about 19 KB gzipped, has no dependencies, loads deferred and only on pages that use AnimateGL. The WebGL renderer loads only on pages that use a WebGL animation.
+* **Site intro.** Reveal the whole page as it loads with a Curtain or a Fade in your colour, on the first page of a visit or on every page.
+* **Works with AI assistants.** With WordPress 6.9+ and the MCP Adapter plugin, Claude, Cursor or VS Code can list the animations and animate a page's blocks for you, each change saved with a revision.
 * **SEO friendly and accessible.** Content stays visible to search engines and to visitors without JavaScript. Visitors who prefer reduced motion see your content without animation.
 * **Free, no sign-up.** All 22 animations, 106 presets, the typewriter, count-up numbers and the free hover and scroll effects are in the free plugin. [AnimateGL Pro](https://animategl.com/pro/) adds more when you need it.
 
@@ -114,7 +116,7 @@ Add an entrance animation or a hover effect to any Elementor section, column, co
 
 = Bricks animations =
 
-Add an entrance animation or a hover effect to any Bricks section, container, block, div or element. Open the element's Style tab and choose the animation type, direction, distance, duration, delay and easing in the AnimateGL group. The builder's canvas shows the element as it is, without its animation: preview the page to see it play.
+Add an entrance animation or a hover effect to any Bricks section, container, block, div or element. Open the element's Style tab and choose the animation type, direction, distance, duration, delay and easing in the AnimateGL group. The animation plays on the builder's canvas as you set it, and again each time you change it.
 
 = Divi animations =
 
@@ -123,6 +125,14 @@ Add an entrance animation or a hover effect to any Divi 5 section, row or module
 = CSS class animations for any page builder =
 
 Not using Gutenberg, Elementor, Bricks or Divi 5? Add an animation's CSS class to any element in Visual Composer, another page builder or your theme, for example `agl agl-fadeCSSUp` or `agl agl-bendLeft`. The Animations tab of the AnimateGL admin page lists every preset animation with a live preview and a CSS class you can copy, and its class builder writes the classes for the settings you pick.
+
+= Site intro =
+
+Reveal the whole page as it loads. In the Settings tab of the AnimateGL page, turn on the site intro and pick a Curtain that opens or a Fade, its colour, and whether it plays on the first page of a visit or on every page. It's CSS only, the page is drawn under it from the start, and the page's own animations start as it goes. Visitors who prefer reduced motion don't see it. AnimateGL Pro adds more intro styles, the site logo on the cover and transitions between pages.
+
+= Animate with AI assistants =
+
+AnimateGL registers WordPress abilities (WordPress 6.9 or later) that AI assistants can use through the [MCP Adapter](https://github.com/WordPress/mcp-adapter) plugin: Claude Code, Claude Desktop, Cursor and VS Code. Ask for "make the headings slide up and the paragraphs fade in one after another" and the assistant lists AnimateGL's animations, finds the page, reads its blocks and sets the animations. Each change is checked against the animations your site has and saved in one go with a revision, so you can undo it. Blocks set in their AnimateGL panel are left alone. The assistant connects as a WordPress user with an application password and can only change posts that user can edit. Nothing is sent to our servers.
 
 = Animation Editor =
 
@@ -173,10 +183,11 @@ If you run into a problem or want a new feature, please [open a support topic](h
 == Installation ==
 
 1. In your WordPress admin, go to Plugins > Add New Plugin, search for "AnimateGL", then install and activate it.
-2. In the block editor, select a block, open the AnimateGL panel in the block settings sidebar and choose an entrance animation or a hover effect.
-3. In Elementor, select an element, open the Advanced tab and choose an animation in the AnimateGL section.
-4. In Bricks, open the element's Style tab, and in Divi 5 the module's Advanced tab, and choose an animation in the AnimateGL group.
-5. With any other page builder, add a preset CSS class such as `agl agl-fadeCSSUp` to the element. The Animations tab of the AnimateGL admin page lists them all.
+2. To see an example first, open the AnimateGL page in your admin menu and click Create a sample page on its Home tab.
+3. In the block editor, select a block, open the AnimateGL panel in the block settings sidebar and choose an entrance animation or a hover effect.
+4. In Elementor, select an element, open the Advanced tab and choose an animation in the AnimateGL section.
+5. In Bricks, open the element's Style tab, and in Divi 5 the module's Advanced tab, and choose an animation in the AnimateGL group.
+6. With any other page builder, add a preset CSS class such as `agl agl-fadeCSSUp` to the element. The Animations tab of the AnimateGL admin page lists them all.
 
 == Frequently Asked Questions ==
 
@@ -190,7 +201,7 @@ Select the section, column, container or widget, open the Advanced tab and choos
 
 = How do I add animations in Bricks or Divi? =
 
-In Bricks, select the element and open the AnimateGL group in its Style tab. In Divi 5, open the module's Advanced tab and the AnimateGL group. Preview the page to see the animation play. On Divi 4, add the animation's CSS class to the module's CSS Class field.
+In Bricks, select the element and open the AnimateGL group in its Style tab: the animation plays on the canvas as you set it. In Divi 5, open the module's Advanced tab and the AnimateGL group, and preview the page to see the animation play. On Divi 4, add the animation's CSS class to the module's CSS Class field.
 
 = How do I add a hover effect? =
 
@@ -215,6 +226,14 @@ Turn on Count up the numbers in the AnimateGL settings, or add the class `agl-co
 = Which easings can I use? =
 
 Linear, sine, quad, cubic, expo, back, elastic, bounce, three springs and steps, 23 in all, in the block sidebar, the page builders and the class builder. A spring sets its own duration.
+
+= Can an AI assistant add the animations for me? =
+
+Yes, with WordPress 6.9 or later. Install the MCP Adapter plugin, create an application password in your WordPress profile and connect your assistant (Claude Code, Claude Desktop, Cursor or VS Code) to the site. Then ask it to animate a page in your own words. Every change is saved with a revision. See [Use AnimateGL with AI](https://animategl.com/docs/ai/) in the docs for the steps and example requests.
+
+= How do I add a site intro? =
+
+Open the AnimateGL page's Settings tab, turn on Site intro, and pick its style, colour and when it plays.
 
 = Is AnimateGL free? =
 
@@ -250,7 +269,7 @@ They are JavaScript and CSS libraries you add to a theme by hand. AnimateGL is a
 
 = Will animations slow down my website? =
 
-CSS animations are GPU accelerated, and the core animation script is about 19 KB gzipped, has no dependencies and loads deferred. The WebGL renderer loads only on pages that use a WebGL animation.
+CSS animations are GPU accelerated, and the core animation script is about 19 KB gzipped, has no dependencies and loads deferred. It loads only on pages that use AnimateGL, and the WebGL renderer only on pages that use a WebGL animation.
 
 = Is my content visible to search engines and without JavaScript? =
 
@@ -277,6 +296,9 @@ WebGL animations and effects are drawn on one canvas above the page, at z-index 
 
 == Upgrade Notice ==
 
+= 1.8.0 =
+AI assistants can animate your pages, a site intro, live animations on the Bricks canvas, a 7-day Pro trial, and the scripts load only on pages that use AnimateGL.
+
 = 1.7.0 =
 Eight more free CSS animations, count-up numbers, typewriter text, and Bricks and Divi 5 support. Requires WordPress 6.6 and PHP 7.4.
 
@@ -291,6 +313,19 @@ More easings, free Lift, Grow, Tilt and Skew effects, AnimateGL settings for Ele
 Requires WordPress 6.6 and PHP 7.4. Adds an animation preview to the block editor, respects reduced motion, and keeps content visible without JavaScript.
 
 == Changelog ==
+
+= 1.8.0 =
+* New: AI tools can animate your pages. With WordPress 6.9 or later and the MCP Adapter plugin, AI assistants that connect to WordPress through it (Claude Code, Claude Desktop, Cursor, VS Code) can list AnimateGL's animations, find a page, read its blocks and set animations on them. Each change is checked against the animations the site has, saved in one go with a revision to undo it, and refused for blocks set in their AnimateGL panel
+* New: Site intro, in the Settings tab: the whole page is revealed as it loads, by a Curtain that opens or a Fade, in a colour you pick, on the first page of a visit or on every page. It's CSS only, the page is drawn under it from the start, and the page's animations start as it goes. Not under reduced motion
+* New: Animations play on the Bricks builder's canvas while you edit. An entrance replays when you change it, and hover effects, count-up numbers and the typewriter start as soon as you pick them
+* New: The AnimateGL page's Home tab shows how to start, step by step for the block editor, Elementor, Bricks and Divi, and a "Create a sample page" button makes a draft page full of animated blocks to try
+* New: Start a 7-day free trial of AnimateGL Pro from the Get Pro tab, the Home tab and the block panel's More with Pro row
+* Improvement: Activating AnimateGL opens its Home tab. The opt-in for update emails is still offered, in a notice and on the Plugins screen
+* Improvement: AnimateGL's scripts load only on pages that use it. A page without AnimateGL animations loads 2 KB of CSS and a small inline script, not the 70 KB runtime. Classes added outside blocks and page builders (a theme template, a widget) are found in the browser and still animate. To load it on every page as before, return true from the animategl_load_everywhere filter
+* Improvement: The image block's AnimateGL toolbar button now says Animate next to its icon
+* Fix: In page builders, Square, Circle and Line with the Default direction, and Glitch with a direction, now play their own animation instead of the site default
+* Fix: AnimateGL downloaded every animated image itself as the page loaded, lazy images far down the page too, and often a second file where the browser picks another size for the screen. Images are now left to the browser, and a WebGL animation draws the file the page shows. A gallery of twelve lazy photos now downloads what it does without the plugin: in our tests 1.2 MB in place of 1.55 MB on a desktop, and 2.2 MB in place of 2.9 MB on a phone (3.6 MB with WebGL animations)
+* Improvement: Pages with many animated elements start about three times faster: a hundred elements are set up in 30 ms in place of 93 ms on a desktop, and in 118 ms in place of 325 ms on a slow phone
 
 = 1.7.0 =
 * New: Eight more free CSS animations, each with four directions: Blur (sharpens as it fades in), Focus (sharpens as it settles from a little larger), Flip (turns in from edge on), Fold (swings out on a hinge at one edge), Rotate (spirals in, or turns or swings on a corner), Roll (rolls in from the side), Skew (slides in leaning and straightens) and Pop (grows past its size and settles). In the block sidebar, Elementor, Bricks, the class builder and the Animation Editor, and as classes such as agl-blurCSSUp or agl-popCSS

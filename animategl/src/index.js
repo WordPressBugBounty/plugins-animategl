@@ -162,6 +162,11 @@ function ProRow() {
 			</p>
 			<p style={ { margin: 0 } }>
 				<ExternalLink href={ window.aglEditor.proUrl }>{ __( 'See AnimateGL Pro', 'animategl' ) }</ExternalLink>{ ' ' }
+				{ window.aglEditor.trialUrl && (
+					<ExternalLink href={ window.aglEditor.trialUrl } style={ { marginLeft: '12px' } }>
+						{ __( 'Start 7-day free trial', 'animategl' ) }
+					</ExternalLink>
+				) }{ ' ' }
 				<Button variant="link" onClick={ () => set( 'animategl', 'hideProRow', true ) } style={ { marginLeft: '12px' } }>
 					{ __( 'Hide this', 'animategl' ) }
 				</Button>
@@ -221,10 +226,10 @@ function AnimationControls( props ) {
 		<Fragment>
 			<SelectControl
 				__next40pxDefaultSize
-				label={ __( 'Entrance Animation', 'animategl' ) }
+				label={ __( 'Entrance animation', 'animategl' ) }
 				help={
 					isSiteDefault
-						? __( 'The animation set on the AnimateGL page. To change its timing, pick an animation here.', 'animategl' )
+						? __( 'The animation set on the Default animation tab of the AnimateGL page. To change its timing, pick an animation here.', 'animategl' )
 						: __( 'CSS animations are light and work on any block. WebGL ones draw the block on a canvas and look best on images.', 'animategl' )
 				}
 				value={ aglInName }
@@ -244,8 +249,8 @@ function AnimationControls( props ) {
 			>
 				<option value="">{ __( 'None', 'animategl' ) }</option>
 				<option value="custom">{ __( 'Site default', 'animategl' ) }</option>
-				<optgroup label={ __( 'CSS', 'animategl' ) }>{ groups.css.map( option ) }</optgroup>
-				<optgroup label={ __( 'WebGL', 'animategl' ) }>{ groups.webgl.map( option ) }</optgroup>
+				<optgroup label={ __( 'CSS: light, any block', 'animategl' ) }>{ groups.css.map( option ) }</optgroup>
+				<optgroup label={ __( 'WebGL: 3D, best on images', 'animategl' ) }>{ groups.webgl.map( option ) }</optgroup>
 				{ groups.custom.length > 0 && <optgroup label={ __( 'My animations', 'animategl' ) }>{ groups.custom.map( option ) }</optgroup> }
 			</SelectControl>
 
@@ -355,7 +360,7 @@ function AnimationControls( props ) {
 						/>
 
 						<ToggleControl
-							label={ __( 'Lock to Scrollbar', 'animategl' ) }
+							label={ __( 'Lock to scrollbar', 'animategl' ) }
 							help={ __( 'The animation follows the scrollbar instead of playing on its own.', 'animategl' ) }
 							checked={ aglLockToScrollbar }
 							onChange={ ( value ) => setAttributes( { aglLockToScrollbar: value } ) }
@@ -421,6 +426,8 @@ function ToolbarControls( { locked, ...props } ) {
 					renderToggle={ ( { isOpen, onToggle } ) => (
 						<ToolbarButton
 							icon={ animateIcon }
+							// A word next to the icon, as core's Replace has: an icon alone wasn't found
+							text={ __( 'Animate', 'animategl' ) }
 							label={ __( 'AnimateGL animation', 'animategl' ) }
 							onClick={ onToggle }
 							aria-expanded={ isOpen }

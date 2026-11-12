@@ -7065,14 +7065,46 @@ class WebGLPlane {
 
     // The element's image, and what its entrance effect loads first (effect.load(), main.js). The effect's load
     // failing doesn't stop the entrance: the effect does without it.
-    loadTextures() {
+    async loadTextures() {
         const effect = this.entranceEffect;
-        const textureLoadingPromisses = [
-            this.loadImage(this.textureImg) /*,
-			this.loadImage(this.alphaMapImg)*/,
-        ];
+        const textureLoadingPromisses = [];
         if (effect && effect.load) textureLoadingPromisses.push(Promise.resolve(effect.load(this)).catch((error) => console.warn('AnimateGL:', error)));
+        await this.textureFromImage();
+        textureLoadingPromisses.push(this.loadImage(this.textureImg));
         return Promise.all(textureLoadingPromisses);
+    }
+
+    // An image's texture is its file, loaded again in CORS mode so WebGL may read it: the file the browser is showing
+    // (currentSrc, its pick from srcset and sizes), and only once the element's own image has loaded, so it comes
+    // from the browser's cache and not as a second download next to the first. Called when the element is about to
+    // be drawn (its entrance, or its effects without one) and a screen ahead of that (prefetchTexture()). The core
+    // used to load every animated image as the page started, CSS entrances too (AnimatedPlane.findDomElement()).
+    async textureFromImage() {
+        if (!this.isImage) return;
+        const img = this.domElement;
+        if (!img.complete) {
+            await new Promise((resolve) => {
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', resolve, { once: true });
+            });
+            // Another element meanwhile (children added, findDomElement()): the texture is that one's
+            if (this.domElement !== img) return this.textureFromImage();
+        }
+        const url = img.currentSrc || img.src;
+        if (!url || url === this.textureUrl) return;
+        this.textureUrl = url;
+        this.textureImg = new Image();
+        this.textureImg.crossOrigin = 'anonymous';
+        this.textureImg.src = url;
+    }
+
+    // An image's texture a screen before it comes into view (AnimatedPlane's snapshot observer), so its entrance
+    // doesn't wait for it. A lazy image the browser hasn't started on is left to it, and loaded as the texture after.
+    prefetchTexture() {
+        if (!this.isImage || this.detached || this.failed || !this.needsWebGL()) return;
+        // Waits for play(): it may never come
+        if (this.manual && !this.playRequested()) return;
+        this.textureFromImage();
     }
 
     getCanvas(width, height, domElement) {
@@ -7300,12 +7332,13 @@ class WebGLPlane {
     loadImage(img) {
         return new Promise(function (resolve, reject) {
             const isLoaded = img.complete && img.naturalHeight !== 0;
-            const failed = () => new Error(`couldn't load the image ${img.src} for WebGL (missing, or on another domain without CORS headers)`);
+            const failed = () => new Error(`couldn't load the image ${img.src || '(no source)'} for WebGL (missing, or on another domain without CORS headers)`);
 
             if (isLoaded) {
                 resolve(img);
-            } else if (img.complete && img.src) {
-                // Already failed: its error event has been and gone
+            } else if (img.complete) {
+                // Already failed (its error event has been and gone), or the element's image has no file to load:
+                // waiting for an event here left the element hidden for good
                 reject(failed());
             } else {
                 img.addEventListener('load', function () {
@@ -7447,11 +7480,14 @@ class WebGLPlane {
                 const self = this;
                 this.renderHTMLToCanvasPromise = this.renderHTMLToCanvas();
                 this.renderHTMLToCanvasPromise.then(function () {
-                    self.loadImage(self.textureImg).then(function (img) {
-                        if (!self.texture) return;
-                        self.texture.image = img;
-                        self.layer.wake();
-                    });
+                    self.loadImage(self.textureImg)
+                        .then(function (img) {
+                            if (!self.texture) return;
+                            self.texture.image = img;
+                            self.layer.wake();
+                        })
+                        // No snapshot was made: the texture it has stays
+                        .catch(() => {});
                     // const img = new Image()
                     // img.src = self.textureImg.src
                     // document.body.appendChild(img)

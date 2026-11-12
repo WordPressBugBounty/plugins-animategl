@@ -37,20 +37,34 @@
 	grid-template-columns: 1fr 1fr;
 }
 
-.agl-way {
-	margin-bottom: 12px;
+.agl-steps {
+	margin: 0 0 16px 20px;
 }
 
-.agl-way strong {
+.agl-steps > li {
+	margin-bottom: 16px;
+}
+
+.agl-steps > li > strong,
+.agl-way {
 	display: block;
+	margin-bottom: 6px;
+}
+
+.agl-steps form,
+.agl-sample-open {
+	margin-top: 8px;
+}
+
+.agl-steps form {
+	margin-bottom: 0;
 }
 
 .agl-home-actions .button {
 	margin-right: 6px;
 }
 
-.agl-status ul,
-.agl-whats-new ul {
+.agl-status ul {
 	margin: 0;
 }
 
@@ -74,10 +88,6 @@
 	background: #dba617;
 }
 
-.agl-whats-new li {
-	list-style: disc;
-	margin-left: 18px;
-}
 
 /* Animations: the class builder */
 .agl-class-builder {

@@ -6,8 +6,9 @@ if (!defined('ABSPATH')) {
 
 // The Bricks builder: an AnimateGL group in every element's Style tab, made from AnimateGL_Controls' controls
 // (includes/controls.php) as el.php makes Elementor's, and their classes and attributes on the element's root tag
-// on the page. Bricks doesn't run bricks/element/set_root_attributes in the builder, so elements don't animate (or
-// hide) on its canvas: Preview shows them.
+// on the page. Bricks' builder canvas draws most elements with its own Vue templates, which don't run
+// bricks/element/set_root_attributes, so js/bricks-builder.js puts the same classes and attributes on them there
+// (from the settings in the canvas, through the agl_bricks_classes AJAX action) and they animate as they're edited.
 class AnimateGL_Bricks
 {
 	// Bricks' own elements, for a Bricks that hasn't listed its elements yet when the filters are added
@@ -24,6 +25,53 @@ class AnimateGL_Bricks
 		// Bricks lists its elements on init
 		add_action('init', array($this, 'add_filters'), 99);
 		add_filter('bricks/element/set_root_attributes', array($this, 'root_attributes'), 10, 2);
+		add_action('wp_enqueue_scripts', array($this, 'builder_assets'), 20);
+		add_action('wp_ajax_agl_bricks_classes', array($this, 'ajax_classes'));
+	}
+
+	// The builder's canvas (the iframe inside the builder): the script that animates its elements
+	public function builder_assets()
+	{
+		if (!function_exists('bricks_is_builder_iframe') || !bricks_is_builder_iframe() || !apply_filters('animategl_enqueue', true)) {
+			return;
+		}
+		// The canvas's elements get their classes in the browser, so the runtime can't be found on the page's HTML
+		AnimateGL::get_instance()->enqueue_runtime();
+		$version = defined('ANIMATE_GL_VERSION') ? ANIMATE_GL_VERSION : false;
+		wp_enqueue_script('agl-bricks-builder', plugins_url('js/bricks-builder.js', ANIMATE_GL_FILE), array('agl-embed'), $version, array('in_footer' => true, 'strategy' => 'defer'));
+		wp_add_inline_script('agl-bricks-builder', 'var aglBricks = ' . wp_json_encode(array(
+			'ajax' => admin_url('admin-ajax.php'),
+			'nonce' => wp_create_nonce('agl_bricks_classes'),
+			'keys' => array_keys(AnimateGL_Controls::all()),
+		)) . ';', 'before');
+	}
+
+	// The classes and attributes of the canvas's elements: [{id, name, settings}] in, {id: {classes, attributes}} out
+	public function ajax_classes()
+	{
+		check_ajax_referer('agl_bricks_classes', 'nonce');
+		if (!current_user_can('edit_posts')) {
+			wp_send_json_error(null, 403);
+		}
+		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- JSON, each value is read as a control's value below
+		$elements = isset($_POST['elements']) ? json_decode(wp_unslash($_POST['elements']), true) : array();
+		$result = array();
+		foreach (is_array($elements) ? array_slice($elements, 0, 2000) : array() as $item) {
+			if (!is_array($item) || empty($item['id']) || !is_string($item['id']) || !preg_match('/^[a-z0-9]{1,32}$/i', $item['id'])) {
+				continue;
+			}
+			$element = (object) array(
+				'id' => $item['id'],
+				'name' => isset($item['name']) && is_string($item['name']) ? sanitize_key($item['name']) : '',
+				'settings' => isset($item['settings']) && is_array($item['settings']) ? $item['settings'] : array(),
+			);
+			$values = self::element_values($element);
+			$result[$item['id']] = array(
+				'classes' => AnimateGL_Controls::classes($values),
+				'attributes' => (object) $values->attributes,
+			);
+		}
+		wp_send_json_success((object) $result);
 	}
 
 	public function add_filters()

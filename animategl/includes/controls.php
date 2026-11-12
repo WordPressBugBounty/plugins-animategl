@@ -62,6 +62,27 @@ class AnimateGL_Controls
 		return apply_filters('animategl_elementor_entrance_options', $options);
 	}
 
+	/**
+	 * The directions an entrance has, as the runtime's presets are named (agl-<entrance><direction>): '' for the
+	 * preset without one. Lite's entrances have '' and Left, Right, Up and Down, Glitch only ''. Add-ons give theirs
+	 * with the animategl_entrance_directions filter (entrance => directions). null for an entrance nobody lists, such
+	 * as a saved animation or a JS-only preset, whose directions PHP doesn't know.
+	 */
+	public static function entrance_directions($entrance)
+	{
+		static $directions;
+		if (null === $directions) {
+			$all = array('', 'Left', 'Right', 'Up', 'Down');
+			$directions = array();
+			foreach (array('fadeCSS', 'zoomInCSS', 'zoomOutCSS', 'wipeCSS', 'slideCSS', 'blurCSS', 'focusCSS', 'flipCSS', 'foldCSS', 'rotateCSS', 'rollCSS', 'skewCSS', 'popCSS', 'fade', 'flip', 'slide', 'stretch', 'bend', 'peel', 'zoomIn', 'zoomOut') as $name) {
+				$directions[$name] = $all;
+			}
+			$directions['glitch'] = array('');
+			$directions = (array) apply_filters('animategl_entrance_directions', $directions);
+		}
+		return isset($directions[$entrance]) ? array_values(array_map('strval', (array) $directions[$entrance])) : null;
+	}
+
 	// The entrance and its timing, lite's own controls
 	private static function entrance()
 	{
@@ -75,7 +96,7 @@ class AnimateGL_Controls
 		return array(
 			'agl_in_name' => array(
 				'type' => 'select',
-				'label' => __('Entrance Animation', 'animategl'),
+				'label' => __('Entrance animation', 'animategl'),
 				'options' => $entrance,
 				'default' => '',
 				// js/el-editor.js fills it from the runtime's presets
@@ -139,7 +160,7 @@ class AnimateGL_Controls
 			),
 			'agl_in_lockToScrollbar' => array(
 				'type' => 'switch',
-				'label' => __('Lock to Scrollbar', 'animategl'),
+				'label' => __('Lock to scrollbar', 'animategl'),
 				'default' => false,
 				'condition' => $animated,
 				'elementor' => $classic,
@@ -236,7 +257,13 @@ class AnimateGL_Controls
 		if (!$name || !AnimateGL::is_class_token($name)) {
 			return array();
 		}
-		$direction = $values->get('agl_in_direction');
+		$direction = (string) $values->get('agl_in_direction');
+		// A direction the entrance doesn't have would name no preset: its first one instead (Square's Center, the
+		// Glitch without one)
+		$directions = self::entrance_directions($name);
+		if ($directions && !in_array($direction, $directions, true)) {
+			$direction = $directions[0];
+		}
 		$classes = 'custom' == $name ? array('agl') : array('agl', 'agl-' . $name . (AnimateGL::is_class_token($direction) ? $direction : ''));
 		$classes[] = 'agl-in-duration-' . $values->get('agl_in_duration');
 		$classes[] = 'agl-in-delay-' . $values->get('agl_in_delay');
@@ -259,7 +286,12 @@ class AnimateGL_Controls
 	public static function classes($values)
 	{
 		$classes = (array) apply_filters('animategl_control_classes', self::entrance_classes($values), $values);
-		return array_values(array_filter(array_map('strval', $classes), 'strlen'));
+		$classes = array_values(array_filter(array_map('strval', $classes), 'strlen'));
+		// An element on the page uses AnimateGL, so the page loads the runtime
+		if ($classes) {
+			AnimateGL::get_instance()->enqueue_runtime();
+		}
+		return $classes;
 	}
 }
 

@@ -9,14 +9,15 @@ $animategl_img = $this->plugin_dir_url . 'img/';
 $animategl_builders = array(
 	'ET_BUILDER_VERSION' => array('Divi', __('Module settings > Advanced > CSS ID & Classes > CSS Class', 'animategl')),
 	'FL_BUILDER_VERSION' => array('Beaver Builder', __('Module settings > Advanced > HTML Element > Class', 'animategl')),
-	'BRICKS_VERSION' => array('Bricks', __('Element > Style > CSS > CSS classes', 'animategl')),
 	'__BREAKDANCE_VERSION' => array('Breakdance', __('Element > Settings > Advanced > Classes', 'animategl')),
 	'CT_VERSION' => array('Oxygen', __('Element > Selector field: add each class', 'animategl')),
 	'WPB_VC_VERSION' => array('WPBakery', __('Element settings > Extra class name', 'animategl')),
 );
+// Divi 5 and Bricks have an AnimateGL group of their own (divi.php, bricks.php); Divi 4 takes classes
+$animategl_divi5 = function_exists('et_builder_d5_enabled') && et_builder_d5_enabled();
 $animategl_active_builders = array();
 foreach ($animategl_builders as $animategl_constant => $animategl_builder) {
-	if (defined($animategl_constant)) {
+	if (defined($animategl_constant) && !('ET_BUILDER_VERSION' === $animategl_constant && $animategl_divi5)) {
 		$animategl_active_builders[] = $animategl_builder[0];
 	}
 }
@@ -69,7 +70,7 @@ $animategl_effects = array(
 $animategl_effect_more = array(
 	'hover' => array(__('Zoom, liquid, ripple, pixel smear, colour reveals, image swap and more, drawn with WebGL.', 'animategl'), AnimateGL_Effects::HOVER_URL, __('See them live', 'animategl')),
 	'scroll' => array(__('Bend, wave and RGB shift, drawn with WebGL while the page scrolls.', 'animategl'), AnimateGL_Effects::SCROLL_URL, __('See them live', 'animategl')),
-	'text' => array(__('Staggered groups and text split into words or letters.', 'animategl'), '#get-pro', __('Get Pro', 'animategl')),
+	'text' => array(__('Staggered groups and text split into words, letters or lines, revealed from behind an edge.', 'animategl'), '#get-pro', __('Get Pro', 'animategl')),
 	'loop' => array(__('Pulse, float, wobble, shake, heartbeat and swing, repeating for as long as the block is on screen.', 'animategl'), '#get-pro', __('Get Pro', 'animategl')),
 );
 $animategl_effect_groups = array(
@@ -92,7 +93,7 @@ $animategl_tab_link = function ($id, $label) {
 		<?php
 		$animategl_tab_link('home', __('Home', 'animategl'));
 		$animategl_tab_link('animations', __('Animations', 'animategl'));
-		$animategl_tab_link('animation-editor', __('Editor', 'animategl'));
+		$animategl_tab_link('animation-editor', __('Default animation', 'animategl'));
 		// Add tabs: <a href="#my-tab" class="nav-tab">, with a matching <div id="my-tab" class="tab-content"> from animategl_admin_tab_content
 		do_action('animategl_admin_tabs');
 		$animategl_tab_link('help', __('Help', 'animategl'));
@@ -104,28 +105,49 @@ $animategl_tab_link = function ($id, $label) {
 
 	<div id="home" class="tab-content" style="display:none;">
 		<div class="agl-home-grid">
-			<div class="agl-box">
-				<h2><?php esc_html_e('Three ways to animate', 'animategl'); ?></h2>
-				<div class="agl-way">
-					<strong><?php esc_html_e('Block editor', 'animategl'); ?></strong>
-					<span><?php esc_html_e('Select a block and open AnimateGL in the sidebar, or click the AnimateGL button in the block toolbar.', 'animategl'); ?></span>
-				</div>
-				<?php if (did_action('elementor/loaded')) : ?>
-					<div class="agl-way">
-						<strong><?php esc_html_e('Elementor', 'animategl'); ?></strong>
-						<?php /* translators: %s is the plugin name (AnimateGL) */ ?>
-						<span><?php printf(esc_html__('Element > Advanced > %s', 'animategl'), 'AnimateGL'); ?></span>
-					</div>
-				<?php endif; ?>
-				<div class="agl-way">
-					<strong><?php esc_html_e('Any HTML or page builder', 'animategl'); ?></strong>
-					<span><?php esc_html_e('Add the classes of an animation to the element:', 'animategl'); ?>
-						<code class="agl-copy-text">agl agl-fadeCSSLeft</code>
-						<button type="button" class="button button-small agl-copy"><?php esc_html_e('Copy', 'animategl'); ?></button></span>
-				</div>
+			<div class="agl-box agl-start">
+				<h2><?php esc_html_e('Get started', 'animategl'); ?></h2>
+				<ol class="agl-steps">
+					<?php if (AnimateGL_Sample::can_create()) : ?>
+						<li>
+							<strong><?php esc_html_e('See an example', 'animategl'); ?></strong>
+							<span><?php esc_html_e('A draft page with one animated block of each kind, each saying what it does. Open it in the block editor and click a block to see its AnimateGL settings.', 'animategl'); ?></span>
+							<?php $animategl_sample = AnimateGL_Sample::page_id(); ?>
+							<?php if ($animategl_sample) : ?>
+								<a href="<?php echo esc_url(admin_url('post.php?post=' . $animategl_sample . '&action=edit')); ?>" class="button button-primary agl-sample-open"><?php esc_html_e('Open the sample page', 'animategl'); ?></a>
+							<?php else : ?>
+								<form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+									<input type="hidden" name="action" value="animategl_sample_page">
+									<?php wp_nonce_field('animategl_sample_page'); ?>
+									<button type="submit" class="button button-primary agl-sample-create"><?php esc_html_e('Create a sample page', 'animategl'); ?></button>
+								</form>
+							<?php endif; ?>
+						</li>
+					<?php endif; ?>
+					<li>
+						<strong><?php esc_html_e('Animate your own content', 'animategl'); ?></strong>
+						<span class="agl-way"><b><?php esc_html_e('Block editor', 'animategl'); ?>:</b> <?php esc_html_e('select a block, open the AnimateGL panel in the settings sidebar (or click the AnimateGL button in the block toolbar) and pick an entrance animation.', 'animategl'); ?></span>
+						<?php if (did_action('elementor/loaded')) : ?>
+							<span class="agl-way"><b>Elementor:</b> <?php esc_html_e('select an element, open its Advanced tab and the AnimateGL section.', 'animategl'); ?></span>
+						<?php endif; ?>
+						<?php if (defined('BRICKS_VERSION')) : ?>
+							<span class="agl-way"><b>Bricks:</b> <?php esc_html_e('select an element, open its Style tab and the AnimateGL group.', 'animategl'); ?></span>
+						<?php endif; ?>
+						<?php if ($animategl_divi5) : ?>
+							<span class="agl-way"><b>Divi:</b> <?php esc_html_e('open a module\'s Advanced tab and the AnimateGL group.', 'animategl'); ?></span>
+						<?php endif; ?>
+						<span class="agl-way"><b><?php esc_html_e('Any other builder or HTML', 'animategl'); ?>:</b> <?php esc_html_e('add an animation\'s classes to the element, for example', 'animategl'); ?>
+							<code class="agl-copy-text">agl agl-fadeCSSLeft</code>
+							<button type="button" class="button button-small agl-copy"><?php esc_html_e('Copy', 'animategl'); ?></button></span>
+					</li>
+					<li>
+						<strong><?php esc_html_e('See it play', 'animategl'); ?></strong>
+						<span><?php esc_html_e('Preview the page and scroll: each animation plays when its block scrolls into view. In the block editor, Preview animation plays it in place.', 'animategl'); ?></span>
+					</li>
+				</ol>
 				<p class="agl-home-actions">
-					<a href="#animations" class="button button-primary agl-tab-link"><?php esc_html_e('Browse animations', 'animategl'); ?></a>
-					<a href="#animation-editor" class="button agl-tab-link"><?php esc_html_e('Open the editor', 'animategl'); ?></a>
+					<a href="#animations" class="button agl-tab-link"><?php esc_html_e('Browse animations', 'animategl'); ?></a>
+					<a href="<?php echo esc_url('https://animategl.com/docs/'); ?>" target="_blank" class="button"><?php esc_html_e('Read the guide', 'animategl'); ?></a>
 				</p>
 			</div>
 			<div class="agl-box agl-status">
@@ -137,20 +159,14 @@ $animategl_tab_link = function ($id, $label) {
 						<?php endif; ?>
 					<?php endforeach; ?>
 				</ul>
+				<p><a href="<?php echo esc_url('https://wordpress.org/plugins/animategl/#developers'); ?>" target="_blank"><?php esc_html_e('What\'s new', 'animategl'); ?></a></p>
 				<?php if ($animategl_upsell) : ?>
 					<p><a href="#get-pro" class="agl-tab-link"><?php esc_html_e('WebGL hover and scroll effects, triggers and more with AnimateGL Pro', 'animategl'); ?></a></p>
+					<?php if (AnimateGL::trial_url()) : ?>
+						<p><a href="<?php echo esc_url(AnimateGL::trial_url()); ?>" target="_blank" class="button agl-trial"><?php esc_html_e('Start 7-day free trial', 'animategl'); ?></a></p>
+					<?php endif; ?>
 				<?php endif; ?>
 			</div>
-		</div>
-		<div class="agl-box agl-whats-new">
-			<h2><?php esc_html_e('New in 1.5', 'animategl'); ?></h2>
-			<ul>
-				<li><?php esc_html_e('Pages with only CSS animations load less: the WebGL part loads only where it is used.', 'animategl'); ?></li>
-				<li><?php esc_html_e('Preview button in the block editor, and animations play as you pick them.', 'animategl'); ?></li>
-				<li><?php esc_html_e('AnimateGL controls in the block toolbar, also for blocks in locked patterns and templates.', 'animategl'); ?></li>
-				<li><?php esc_html_e('Respects the reduced motion setting, and content stays visible without JavaScript.', 'animategl'); ?></li>
-			</ul>
-			<p><a href="<?php echo esc_url('https://wordpress.org/plugins/animategl/#developers'); ?>" target="_blank"><?php esc_html_e('Full changelog', 'animategl'); ?></a></p>
 		</div>
 	</div>
 
@@ -251,7 +267,7 @@ $animategl_tab_link = function ($id, $label) {
 	</div>
 
 	<div id="animation-editor" class="tab-content" style="display:none;">
-		<p class="description"><?php esc_html_e('Design the default animation: the one blocks set to "Default" use, and elements with only the agl class.', 'animategl'); ?></p>
+		<p class="description"><?php esc_html_e('Design the site default animation: the one blocks use when their animation is set to "Site default", and elements with only the agl class.', 'animategl'); ?></p>
 		<div class="agl-editor-layout">
 			<div class="agl-editor-stage">
 				<img src="<?php echo esc_url($animategl_img . 'cyber4.jpg'); ?>" class="agl agl-editor" alt="" />
@@ -271,7 +287,7 @@ $animategl_tab_link = function ($id, $label) {
 			<div class="agl-box">
 				<h2><?php esc_html_e('Documentation', 'animategl'); ?></h2>
 				<p><?php esc_html_e('Guides for the block editor, Elementor, CSS classes and every setting.', 'animategl'); ?></p>
-				<p><a href="<?php echo esc_url('https://creativeinteractivemedia.gitbook.io/animategl-wp/'); ?>" target="_blank" class="button"><?php esc_html_e('Read the documentation', 'animategl'); ?></a></p>
+				<p><a href="<?php echo esc_url('https://animategl.com/docs/'); ?>" target="_blank" class="button"><?php esc_html_e('Read the documentation', 'animategl'); ?></a></p>
 			</div>
 			<div class="agl-box">
 				<h2><?php esc_html_e('Get help or ask for a feature', 'animategl'); ?></h2>
@@ -356,9 +372,15 @@ $animategl_tab_link = function ($id, $label) {
 				<p class="description"><?php esc_html_e('You have a pack installed. Pro includes both packs, so you can deactivate it once Pro is active.', 'animategl'); ?></p>
 			<?php endif; ?>
 			<p class="agl-get-pro-actions">
-				<a href="<?php echo esc_url(AnimateGL::pro_url()); ?>" target="_blank" class="button button-primary button-hero"><?php esc_html_e('Get AnimateGL Pro', 'animategl'); ?></a>
+				<?php if (AnimateGL::trial_url()) : ?>
+					<a href="<?php echo esc_url(AnimateGL::trial_url()); ?>" target="_blank" class="button button-primary button-hero agl-trial"><?php esc_html_e('Start 7-day free trial', 'animategl'); ?></a>
+				<?php endif; ?>
+				<a href="<?php echo esc_url(AnimateGL::pro_url()); ?>" target="_blank" class="button <?php echo AnimateGL::trial_url() ? '' : 'button-primary'; ?> button-hero"><?php esc_html_e('Get AnimateGL Pro', 'animategl'); ?></a>
 				<a href="<?php echo esc_url('https://animategl.com/'); ?>" target="_blank" class="button button-hero"><?php esc_html_e('See it live', 'animategl'); ?></a>
 			</p>
+			<?php if (AnimateGL::trial_url()) : ?>
+				<p class="description"><?php esc_html_e('The trial is free for 7 days. Checkout asks for a card, and nothing is charged if you cancel before it ends.', 'animategl'); ?></p>
+			<?php endif; ?>
 		</div>
 	</div>
 	<?php endif; ?>
